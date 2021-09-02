@@ -108,7 +108,7 @@ class EdbStackup(object):
             Dictionary of materials.
         """
         mats = {}
-        for el in self.parent.edbutils.MaterialSetupInfo.GetFromLayout(self.parent._active_layout):
+        for el in self.parent.edbutils.MaterialSetupInfo.GetFromLayout(self.parent.active_layout):
             mats[el.Name] = el
         return mats
 
@@ -137,7 +137,6 @@ class EdbStackup(object):
             material_def.SetProperty(self._edb.Definition.MaterialPropertyId.DielectricLossTangent,self._edb_value(loss_tangent))
             return material_def
         return False
-
 
     @aedt_exception_handler
     def create_conductor(self, name, conductivity=1e6):
@@ -198,7 +197,6 @@ class EdbStackup(object):
         material_def.SetRelativePermitivityAtHighLowFrequency(self._edb_value(relative_permittivity_low),
                                                               self._edb_value(relative_permittivity_high))
         return self._add_dielectric_material_model(name, material_def)
-
 
     @aedt_exception_handler
     def create_djordjevicsarkar_material(self, name, relative_permittivity, loss_tangent, test_frequency):

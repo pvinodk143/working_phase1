@@ -1,5 +1,5 @@
 User Guide
----------
+----------
 
 PyAEDT works both inside AEDT and as a standalone application.
 It automatically detects whether it is running in an IronPython or CPython
@@ -33,7 +33,7 @@ The same result can be obtained with the following code:
 
 .. code:: python
 
-    Launch the latest installed version of AEDT in graphical mode
+    # Launch the latest installed version of AEDT in graphical mode.
 
     from pyaedt import Circuit
     with Circuit(specified_version="2021.1", NG=False) as circuit:

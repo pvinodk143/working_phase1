@@ -55,13 +55,13 @@ class TestClass:
         freq="1GHz"
         setup.props["Frequency"]=freq
         ids_faces = [i.id for i in hfss.modeler.primitives["MyCylinder"].faces]
-        assert self.aedtapp.assign_em_losses(hfss.design_name, hfss.setups[0].name, "LastAdaptive", freq, )
+        assert self.aedtapp.assign_em_losses(
+            hfss.design_name, hfss.setups[0].name, "LastAdaptive", freq, )
 
     def test_06a_create_setup(self):
         mysetup = self.aedtapp.create_setup()
         mysetup.props["Solver"] = "Direct"
         assert mysetup.update()
-
 
     @pytest.mark.skipif(config["desktopVersion"] < "2021.2", reason="Skipped on versions lower than 2021.2")
     def test_07_assign_thermal_loss(self):
@@ -84,7 +84,3 @@ class TestClass:
                                                "MyCylinder", "brass")
         assert mech.assign_fixed_support(mech.modeler.primitives["MyCylinder"].faces[0].id)
         assert mech.assign_frictionless_support(mech.modeler.primitives["MyCylinder"].faces[1].id)
-
-
-
-

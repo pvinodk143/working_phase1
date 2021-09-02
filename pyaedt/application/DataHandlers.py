@@ -21,9 +21,9 @@ def tuple2dict(t, d):
     Parameters
     ----------
     t :
-        
+
     d :
-        
+
 
     Returns
     -------
@@ -51,9 +51,9 @@ def dict2arg(d, arg_out):
     Parameters
     ----------
     d :
-        
+
     arg_out :
-        
+
 
     Returns
     -------
@@ -87,9 +87,9 @@ def arg2dict(arg, dict_out):
     Parameters
     ----------
     arg :
-        
+
     dict_out :
-        
+
 
     Returns
     -------
@@ -116,7 +116,6 @@ def arg2dict(arg, dict_out):
         raise ValueError('Incorrect data argument format')
 
 
-
 @aedt_exception_handler
 def create_list_for_csharp(input_list, return_strings=False):
     """
@@ -124,7 +123,7 @@ def create_list_for_csharp(input_list, return_strings=False):
     Parameters
     ----------
     input_list :
-        
+
     return_strings :
          (Default value = False)
 
@@ -152,7 +151,7 @@ def create_table_for_csharp(input_list_of_list, return_strings=True):
     Parameters
     ----------
     input_list_of_list :
-        
+
     return_strings :
          (Default value = True)
 
@@ -174,7 +173,7 @@ def format_decimals(el):
     Parameters
     ----------
     el :
-        
+
 
     Returns
     -------
@@ -190,13 +189,18 @@ def format_decimals(el):
 
 
 @aedt_exception_handler
-def random_string(length=6):
+def random_string(length=6, only_digits=False, char_set=None):
     """Generate a random string
 
     Parameters
     ----------
     length :
         length of the random string (Default value = 6)
+    only_digits : bool, optional
+        ``True`` if only digits are to be included.
+    char_set : str, optional
+        Custom character set to pick the characters from.  By default chooses from
+        ASCII and digit characters or just digits if ``only_digits`` is ``True``.
 
     Returns
     -------
@@ -204,6 +208,10 @@ def random_string(length=6):
         random string
 
     """
-    char_set = string.ascii_uppercase + string.digits
-    random_str = ''.join(random.sample(char_set, int(length)))
+    if not char_set:
+        if only_digits:
+            char_set = string.digits
+        else:
+            char_set = string.ascii_uppercase + string.digits
+    random_str = ''.join(random.choice(char_set) for _ in range(int(length)))
     return random_str

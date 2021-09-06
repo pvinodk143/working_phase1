@@ -1574,8 +1574,9 @@ class Hfss(FieldAnalysis3D, object):
         --------
 
         Create an open region along the positive y axis.
-
-        >>> open_region = hfss.create_open_region("2GHz", "Aperture", ApplyInfiniteGP=False, GPAXis="+y")
+        >>> hfss = Hfss("ExampleWithOpenRegion")
+        pyaedt Info: Added design 'HFSS_...' of type HFSS.
+        >>> open_region = hfss.create_open_region("2GHz", "PML", ApplyInfiniteGP=False, GPAXis="-z")
 
         """
         vars = [
@@ -1869,7 +1870,7 @@ class Hfss(FieldAnalysis3D, object):
         Create a circle sheet that will be used to create a wave port named
         ``'WavePortFromSheet'``.
 
-        >>> origin_position = hfss.modeler.Position(0, 0, 0)
+        >>> origin_position = hfss.modeler.Position(-140, 0, 0)
         >>> circle = hfss.modeler.primitives.create_circle(hfss.CoordinateSystemPlane.YZPlane,
         ...                                                origin_position, 10, name="WaveCircle")
         >>> hfss.solution_type = "DrivenModal"
@@ -2804,6 +2805,21 @@ class Hfss(FieldAnalysis3D, object):
         -------
         bool
             ``True`` when successful, ``False`` when failed.
+
+        Examples
+        --------
+
+        Export the EigenQ plot in a CSV file.
+        This file will be exported in a temp directory for the purpose of the example.
+        This directory is deleted at the end of the example snippet.
+
+        >>> import tempfile, shutil
+        >>> #temp_directory = tempfile.mkdtemp
+        >>> hfss = Hfss(solution_type="Eigenmode", setup_name="EigenSetup")
+        >>> validation = hfss.create_qfactor_report(temp_directory, outputlist=["Q-factor"],
+        ...                                         setupname="EigenSetup", plotname="foo")
+        >>> #shutil.rmtree(temp_directory)
+        False
 
         """
         npath = os.path.normpath(project_dir)

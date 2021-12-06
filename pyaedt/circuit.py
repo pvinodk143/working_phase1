@@ -2,157 +2,14 @@
 """This module contains the `Circuit` class."""
 
 from __future__ import absolute_import
+
 import math
-from .application.AnalysisNexxim import FieldAnalysisCircuit
-from .desktop import exception_to_desktop
-from .generic.general_methods import generate_unique_name, aedt_exception_handler
-import re
 import os
+import re
 
-RKM_MAPS = {
-    # Resistors
-    'L': 'm',
-    'R': '',
-    'E': '',
-    'k': 'k',
-    'K': 'k',
-    'M': 'M',
-    'G': 'G',
-    'T': 'T',
-    'f': 'f',
-    # Capacitors/Inductors
-    'F': '',
-    'H': '',
-    'h': '',
-    'm': 'm',
-    'u': 'μ',
-    'μ': 'μ',
-    'U': 'μ',
-    'n': 'n',
-    'N': 'n',
-    'p': 'p',
-    'P': 'p',
-    'mF': 'm',
-    'uF': 'μ',
-    'μF': 'μ',
-    'UF': 'μ',
-    'nF': 'n',
-    'NF': 'n',
-    'pF': 'p',
-    'PF': 'p',
-    'mH': 'm',
-    'uH': 'μ',
-    'μH': 'μ',
-    'UH': 'μ',
-    'nH': 'n',
-    'NH': 'n',
-    'pH': 'p',
-    'PH': 'p',
-}
-
-AEDT_MAPS = {
-    'μ': 'u'
-}
-
-
-def from_rkm(code):
-    """Convert an RKM code string to a string with a decimal point.
-
-    Parameters
-    ----------
-    code : str
-        RKM code string.
-
-    Returns
-    -------
-    str
-        String with a decimal point and an R value.
-
-    Examples
-    --------
-    >>> from pyaedt.circuit import from_rkm
-    >>> from_rkm('R47')
-    '0.47'
-
-    >>> from_rkm('4R7')
-    '4.7'
-
-    >>> from_rkm('470R')
-    '470'
-
-    >>> from_rkm('4K7')
-    '4.7k'
-
-    >>> from_rkm('47K')
-    '47k'
-
-    >>> from_rkm('47K3')
-    '47.3k'
-
-    >>> from_rkm('470K')
-    '470k'
-
-    >>> from_rkm('4M7')
-    '4.7M'
-
-    """
-
-    # Matches RKM codes that start with a digit.
-    # fd_pattern = r'([0-9]+)([LREkKMGTFmuµUnNpP]+)([0-9]*)'
-    fd_pattern = r'([0-9]+)([{}]+)([0-9]*)'.format(''.join(RKM_MAPS.keys()), )
-    # matches rkm codes that end with a digit
-    # ld_pattern = r'([0-9]*)([LREkKMGTFmuµUnNpP]+)([0-9]+)'
-    ld_pattern = r'([0-9]*)([{}]+)([0-9]+)'.format(''.join(RKM_MAPS.keys()))
-
-    fd_regex = re.compile(fd_pattern, re.I)
-    ld_regex = re.compile(ld_pattern, re.I)
-
-    for regex in [fd_regex, ld_regex]:
-        m = regex.match(code)
-        if m:
-            fd, base, ld = m.groups()
-            ps = RKM_MAPS[base]
-
-            if ld:
-                return_str = ''.join([fd, '.', ld, ps])
-            else:
-                return_str = ''.join([fd, ps])
-            return return_str
-    return code
-
-
-def to_aedt(code):
-    """
-
-    Parameters
-    ----------
-    code : str
-
-    Returns
-    -------
-    str
-
-    """
-    pattern = r'([{}]{})'.format(''.join(AEDT_MAPS.keys()), '{1}')
-    regex = re.compile(pattern, re.I)
-    return_code = regex.sub(lambda m: AEDT_MAPS.get(m.group(), m.group()), code)
-    return return_code
-
-
-def from_rkm_to_aedt(code):
-    """
-
-    Parameters
-    ----------
-    code : str
-
-
-    Returns
-    -------
-    str
-
-    """
-    return to_aedt(from_rkm(code))
+from pyaedt.application.AnalysisNexxim import FieldAnalysisCircuit
+from pyaedt.generic.DataHandlers import from_rkm_to_aedt
+from pyaedt.generic.general_methods import aedt_exception_handler
 
 
 class Circuit(FieldAnalysisCircuit, object):
@@ -176,20 +33,23 @@ class Circuit(FieldAnalysisCircuit, object):
         Name of the setup to use as the nominal. The default is
         ``None``, in which case the active setup is used or
         nothing is used.
-    specified_version: str, optional
+    specified_version : str, optional
         Version of AEDT to use. The default is ``None``, in which case
-        the active version or latest installed version is  used. This parameter is ignored when Script is launched within AEDT.
+        the active version or latest installed version is  used.
+        This parameter is ignored when Script is launched within AEDT.
     NG : bool, optional
         Whether to run AEDT in the non-graphical mode. The default
-        is``False``, in which case AEDT is launched in the graphical mode. This parameter is ignored when Script is launched within AEDT.
-    AlwaysNew : bool, optional
+        is``False``, in which case AEDT is launched in the graphical mode.
+        This parameter is ignored when Script is launched within AEDT.
+    new_desktop_session : bool, optional
         Whether to launch an instance of AEDT in a new thread, even if
         another instance of the ``specified_version`` is active on the
         machine.  The default is ``True``. This parameter is ignored when Script is launched within AEDT.
-    release_on_exit : bool, optional
+    close_on_exit : bool, optional
         Whether to release AEDT on exit.
     student_version : bool, optional
-        Whether to open the AEDT student version. The default is ``False``. This parameter is ignored when Script is launched within AEDT.
+        Whether to open the AEDT student version. The default is ``False``.
+        This parameter is ignored when Script is launched within AEDT.
 
     Examples
     --------
@@ -218,7 +78,7 @@ class Circuit(FieldAnalysisCircuit, object):
     Create an instance of Circuit using the 2021 R1 version and
     open the specified project, which is ``"myfile.aedt"``.
 
-    >>> aedtapp = Circuit(specified_version="2021.1", projectname="myfile.aedt")
+    >>> aedtapp = Circuit(specified_version="2021.2", projectname="myfile.aedt")
 
     Create an instance of Circuit using the 2021 R2 student version and open
     the specified project, which is named ``"myfile.aedt"``.
@@ -227,26 +87,39 @@ class Circuit(FieldAnalysisCircuit, object):
 
     """
 
-    def __init__(self, projectname=None, designname=None, solution_type=None, setup_name=None,
-                 specified_version=None, NG=False, AlwaysNew=False, release_on_exit=False, student_version=False):
-        FieldAnalysisCircuit.__init__(self, "Circuit Design", projectname, designname, solution_type, setup_name,
-                                      specified_version, NG, AlwaysNew, release_on_exit, student_version)
+    def __init__(
+        self,
+        projectname=None,
+        designname=None,
+        solution_type=None,
+        setup_name=None,
+        specified_version=None,
+        non_graphical=False,
+        new_desktop_session=False,
+        close_on_exit=False,
+        student_version=False,
+    ):
+        FieldAnalysisCircuit.__init__(
+            self,
+            "Circuit Design",
+            projectname,
+            designname,
+            solution_type,
+            setup_name,
+            specified_version,
+            non_graphical,
+            new_desktop_session,
+            close_on_exit,
+            student_version,
+        )
+
+        self.onetwork_data_explorer = self._desktop.GetTool("NdExplorer")
 
     def __enter__(self):
         return self
 
-    def __exit__(self, ex_type, ex_value, ex_traceback):
-        if ex_type:
-            exception_to_desktop(self, ex_value, ex_traceback)
-
-    @property
-    def onetwork_data_explorer(self):
-        """Data explorer."""
-        return self._desktop.GetTool("NdExplorer")
-
     def _get_number_from_string(self, stringval):
-        value = stringval[stringval.find(
-            "=") + 1:].strip().replace("{", "").replace("}", "").replace(",", ".")
+        value = stringval[stringval.find("=") + 1 :].strip().replace("{", "").replace("}", "").replace(",", ".")
         try:
             float(value)
             return value
@@ -287,9 +160,9 @@ class Circuit(FieldAnalysisCircuit, object):
         if self._desktop.GetAutoSaveEnabled() == 1:
             self._desktop.EnableAutoSave(False)
             autosave = True
-        with open(file_to_import, 'rb') as f:
+        with open(file_to_import, "rb") as f:
             for line in f:
-                line = line.decode('utf-8')
+                line = line.decode("utf-8")
                 if ".param" in line[:7].lower():
                     try:
                         ppar = line[7:].split("=")[0]
@@ -301,16 +174,21 @@ class Circuit(FieldAnalysisCircuit, object):
                 elif ".model" in line[:7].lower() or ".lib" in line[:4].lower():
                     model.append(line)
         if model:
-            self.modeler.components.create_symbol("Models_Netlist", [])
-            self.modeler.components.create_new_component_from_symbol("Models_Netlist", [], "")
-            self.modeler.components.create_component(None, component_library=None, component_name="Models_Netlist",
-                                                     xpos=xpos, ypos=0, global_netlist_list=model)
-            self.modeler.components.disable_data_netlist(component_name="Models_Netlist")
+            self.modeler.schematic.create_symbol("Models_Netlist", [])
+            self.modeler.schematic.create_new_component_from_symbol("Models_Netlist", [], "")
+            self.modeler.schematic.create_component(
+                None,
+                component_library=None,
+                component_name="Models_Netlist",
+                location=[xpos, 0],
+                global_netlist_list=model,
+            )
+            self.modeler.schematic.disable_data_netlist(component_name="Models_Netlist")
             xpos += 0.0254
         counter = 0
-        with open(file_to_import, 'rb') as f:
+        with open(file_to_import, "rb") as f:
             for line in f:
-                line = line.decode('utf-8')
+                line = line.decode("utf-8")
                 mycomp = None
                 fields = line.split(" ")
                 name = fields[0].replace(".", "")
@@ -318,43 +196,52 @@ class Circuit(FieldAnalysisCircuit, object):
                 if fields[0][0] == "R":
                     if "{" in fields[3][0]:
                         value = fields[3].strip()[1:-1]
-                    elif '/' in fields[3] and '"' not in fields[3][0] and "'" not in fields[3][0] and "{" not in \
-                            fields[3][0]:
-                        value = self._get_number_from_string(fields[3].split('/')[0])
+                    elif (
+                        "/" in fields[3]
+                        and '"' not in fields[3][0]
+                        and "'" not in fields[3][0]
+                        and "{" not in fields[3][0]
+                    ):
+                        value = self._get_number_from_string(fields[3].split("/")[0])
                     else:
                         value = self._get_number_from_string(fields[3])
-                    mycomp, mycompname = self.modeler.components.create_resistor(name, value, xpos, ypos,
-                                                                                 use_instance_id_netlist=use_instance)
+                    mycomp = self.modeler.schematic.create_resistor(
+                        name, value, [xpos, ypos], use_instance_id_netlist=use_instance
+                    )
                 elif fields[0][0] == "L":
                     if len(fields) > 4 and "=" not in fields[4]:
                         try:
                             float(fields[4])
                         except:
-                            self._messenger.add_warning_message(
-                                "Component {} Not Imported. Check it and manually import".format(name))
+                            self.logger.warning(
+                                "Component {} Not Imported. Check it and manually import".format(name)
+                            )
                             continue
                     if "{" in fields[3][0]:
                         value = fields[3].strip()[1:-1]
-                    elif '/' in fields[3] and '"' not in fields[3][0] and "'" not in fields[3][0]:
-                        value = self._get_number_from_string(fields[3].split('/')[0])
+                    elif "/" in fields[3] and '"' not in fields[3][0] and "'" not in fields[3][0]:
+                        value = self._get_number_from_string(fields[3].split("/")[0])
                     else:
                         value = self._get_number_from_string(fields[3])
-                    mycomp, mycompname = self.modeler.components.create_inductor(name, value, xpos, ypos,
-                                                                                 use_instance_id_netlist=use_instance)
+                    mycomp = self.modeler.schematic.create_inductor(
+                        name, value, [xpos, ypos], use_instance_id_netlist=use_instance
+                    )
                 elif fields[0][0] == "C":
                     if "{" in fields[3][0]:
                         value = fields[3].strip()[1:-1]
-                    elif '/' in fields[3] and '"' not in fields[3][0] and "'" not in fields[3][0]:
-                        value = self._get_number_from_string(fields[3].split('/')[0])
+                    elif "/" in fields[3] and '"' not in fields[3][0] and "'" not in fields[3][0]:
+                        value = self._get_number_from_string(fields[3].split("/")[0])
                     else:
                         value = self._get_number_from_string(fields[3])
-                    mycomp, mycompname = self.modeler.components.create_capacitor(name, value, xpos, ypos,
-                                                                                  use_instance_id_netlist=use_instance)
+                    mycomp = self.modeler.schematic.create_capacitor(
+                        name, value, [xpos, ypos], use_instance_id_netlist=use_instance
+                    )
                 elif fields[0][0] == "Q" or fields[0][0] == "U":
                     if len(fields) == 4 and fields[0][0] == "Q":
                         value = fields[3].strip()
-                        mycomp, mycompname = self.modeler.components.create_npn(fields[0], value, xpos, ypos,
-                                                                                use_instance_id_netlist=use_instance)
+                        mycomp = self.modeler.schematic.create_npn(
+                            fields[0], value, [xpos, ypos], use_instance_id_netlist=use_instance
+                        )
                     else:
                         numpins = len(fields) - 2
                         i = 1
@@ -364,23 +251,27 @@ class Circuit(FieldAnalysisCircuit, object):
                             i += 1
                         parameter = fields[len(fields) - 1][:-1].strip()
                         if "=" in parameter:
-                            parameter_list = [parameter[:parameter.find("=") - 1]]
-                            parameter_value = [parameter[parameter.find("=") + 1:]]
+                            parameter_list = [parameter[: parameter.find("=") - 1]]
+                            parameter_value = [parameter[parameter.find("=") + 1 :]]
                         else:
                             parameter_list = ["MOD"]
                             parameter_value = [parameter]
-                        self.modeler.components.create_symbol(parameter, pins)
+                        self.modeler.schematic.create_symbol(parameter, pins)
                         already_exist = False
-                        for el in self.modeler.components.components:
-                            if self.modeler.components.components[el].name == parameter:
+                        for el in self.modeler.schematic.components:
+                            if self.modeler.schematic.components[el].name == parameter:
                                 already_exist = True
                         if not already_exist:
-                            self.modeler.components.create_new_component_from_symbol(parameter, pins, fields[0][0],
-                                                                                     parameter_list, parameter_value)
-                        mycomp, mycompname = self.modeler.components.create_component(fields[0], component_library=None,
-                                                                                      component_name=parameter,
-                                                                                      xpos=xpos, ypos=ypos,
-                                                                                      use_instance_id_netlist=use_instance)
+                            self.modeler.schematic.create_new_component_from_symbol(
+                                parameter, pins, fields[0][0], parameter_list, parameter_value
+                            )
+                        mycomp = self.modeler.schematic.create_component(
+                            fields[0],
+                            component_library=None,
+                            component_name=parameter,
+                            location=[xpos, ypos],
+                            use_instance_id_netlist=use_instance,
+                        )
                         value = None
                 elif fields[0][0] == "J":
                     numpins = len(fields) - 1
@@ -391,64 +282,72 @@ class Circuit(FieldAnalysisCircuit, object):
                         i += 1
                     parameter = fields[len(fields) - 1][:-1].strip()
                     if "=" in parameter:
-                        parameter_list = [parameter[:parameter.find("=") - 1]]
-                        parameter_value = [parameter[parameter.find("=") + 1:]]
+                        parameter_list = [parameter[: parameter.find("=") - 1]]
+                        parameter_value = [parameter[parameter.find("=") + 1 :]]
                     else:
                         parameter_list = ["MOD"]
                         parameter_value = [parameter]
-                    self.modeler.components.create_symbol(parameter, pins)
+                    self.modeler.schematic.create_symbol(parameter, pins)
                     already_exist = False
-                    for el in self.modeler.components.components:
-                        if self.modeler.components.components[el].name == parameter:
+                    for el in self.modeler.schematic.components:
+                        if self.modeler.schematic.components[el].name == parameter:
                             already_exist = True
                     if not already_exist:
-                        self.modeler.components.create_new_component_from_symbol(parameter, pins, fields[0][0],
-                                                                                 parameter_list, parameter_value)
-                    mycomp, mycompname = self.modeler.components.create_component(fields[0], component_library=None,
-                                                                                  component_name=parameter,
-                                                                                  xpos=xpos, ypos=ypos,
-                                                                                  use_instance_id_netlist=use_instance)
+                        self.modeler.schematic.create_new_component_from_symbol(
+                            parameter, pins, fields[0][0], parameter_list, parameter_value
+                        )
+                    mycomp = self.modeler.schematic.create_component(
+                        fields[0],
+                        component_library=None,
+                        component_name=parameter,
+                        location=[xpos, ypos],
+                        use_instance_id_netlist=use_instance,
+                    )
                     value = None
                 elif fields[0][0] == "D":
                     value = self._get_number_from_string(fields[3])
-                    mycomp, mycompname = self.modeler.components.create_diode(name, value, xpos, ypos,
-                                                                              use_instance_id_netlist=use_instance)
+                    mycomp = self.modeler.schematic.create_diode(
+                        name, value, [xpos, ypos], use_instance_id_netlist=use_instance
+                    )
                 elif fields[0][0] == "V":
                     if "PULSE" not in line:
                         value = self._get_number_from_string(fields[3])
-                        mycomp, mycompname = self.modeler.components.create_voltage_dc(name, value, xpos, ypos,
-                                                                                       use_instance_id_netlist=use_instance)
+                        mycomp = self.modeler.schematic.create_voltage_dc(
+                            name, value, [xpos, ypos], use_instance_id_netlist=use_instance
+                        )
                     else:
-                        value = line[line.index("PULSE") + 6:line.index(")") - 1].split(" ")
+                        value = line[line.index("PULSE") + 6 : line.index(")") - 1].split(" ")
                         value = [i.replace("{", "").replace("}", "") for i in value]
                         fields[1], fields[2] = fields[2], fields[1]
-                        mycomp, mycompname = self.modeler.components.create_voltage_pulse(name, value, xpos, ypos,
-                                                                                          use_instance_id_netlist=use_instance)
+                        mycomp = self.modeler.schematic.create_voltage_pulse(
+                            name, value, [xpos, ypos], use_instance_id_netlist=use_instance
+                        )
                 elif fields[0][0] == "K":
                     value = self._get_number_from_string(fields[3])
-                    mycomp, mycompname = self.modeler.components.create_coupling_inductors(name, fields[1], fields[2],
-                                                                                           value, xpos, ypos,
-                                                                                           use_instance_id_netlist=use_instance)
+                    mycomp = self.modeler.schematic.create_coupling_inductors(
+                        name, fields[1], fields[2], value, [xpos, ypos], use_instance_id_netlist=use_instance
+                    )
                 elif fields[0][0] == "I":
                     if "PULSE" not in line:
                         value = self._get_number_from_string(fields[3])
-                        mycomp, mycompname = self.modeler.components.create_current_dc(name, value, xpos, ypos,
-                                                                                       use_instance_id_netlist=use_instance)
+                        mycomp = self.modeler.schematic.create_current_dc(
+                            name, value, [xpos, ypos], use_instance_id_netlist=use_instance
+                        )
                     else:
-                        value = line[line.index("PULSE") + 6:line.index(")") - 1].split(" ")
+                        value = line[line.index("PULSE") + 6 : line.index(")") - 1].split(" ")
                         value = [i.replace("{", "").replace("}", "") for i in value]
-                        mycomp, mycompname = self.modeler.components.create_current_pulse(name, value, xpos, ypos,
-                                                                                          use_instance_id_netlist=use_instance)
+                        mycomp = self.modeler.schematic.create_current_pulse(
+                            name, value, [xpos, ypos], use_instance_id_netlist=use_instance
+                        )
                 if mycomp:
-                    pins = self.modeler.components.get_pins(mycomp)
                     id = 1
-                    for pin in pins:
-                        pos = self.modeler.components.get_pin_location(mycomp, pin)
+                    for pin in mycomp.pins:
+                        pos = pin.location
                         if pos[0] < xpos:
-                            angle = 6.28318530717959
+                            angle = 0.0
                         else:
-                            angle = 3.14159265358979
-                        self.modeler.components.create_page_port(fields[id], pos[0], pos[1], angle)
+                            angle = math.pi
+                        self.modeler.schematic.create_page_port(fields[id], [pos[0], pos[1]], angle)
                         id += 1
                     ypos += delta
                     if ypos > 0.254:
@@ -460,6 +359,7 @@ class Circuit(FieldAnalysisCircuit, object):
                         counter = 0
         if autosave:
             self._desktop.EnableAutoSave(True)
+        self.logger.info("Netlist correctly imported into %s", self.design_name)
         return True
 
     @aedt_exception_handler
@@ -473,7 +373,7 @@ class Circuit(FieldAnalysisCircuit, object):
         * C
         * Diodes
         * Bjts
-        * Discrete components with syntax ``Uxxx net1 net2 ... netn modname``
+        * Discrete components with syntax ``Uxxx net1 net2get_source_pin_names ... netn modname``
 
         Parameters
         ----------
@@ -491,7 +391,7 @@ class Circuit(FieldAnalysisCircuit, object):
         delta = 0.0508
         use_instance = True
         my_netlist = []
-        with open(file_to_import, 'r') as f:
+        with open(file_to_import, "r") as f:
             for line in f:
                 my_netlist.append(line.split(" "))
         nets = [i for i in my_netlist if i[0] == "NET"]
@@ -528,41 +428,47 @@ class Circuit(FieldAnalysisCircuit, object):
 
             mycomp = None
             if "resistor:RES." in comptype:
-                mycomp, mycompname = self.modeler.components.create_resistor(name, value, xpos, ypos,
-                                                                             use_instance_id_netlist=use_instance)
+                mycomp = self.modeler.schematic.create_resistor(
+                    name, value, [xpos, ypos], use_instance_id_netlist=use_instance
+                )
             elif "inductor:COIL." in comptype:
-                mycomp, mycompname = self.modeler.components.create_inductor(name, value, xpos, ypos,
-                                                                             use_instance_id_netlist=use_instance)
+                mycomp = self.modeler.schematic.create_inductor(
+                    name, value, [xpos, ypos], use_instance_id_netlist=use_instance
+                )
             elif "capacitor:CAP." in comptype:
-                mycomp, mycompname = self.modeler.components.create_capacitor(name, value, xpos, ypos,
-                                                                              use_instance_id_netlist=use_instance)
+                mycomp = self.modeler.schematic.create_capacitor(
+                    name, value, [xpos, ypos], use_instance_id_netlist=use_instance
+                )
             elif "transistor:NPN" in comptype:
-                mycomp, mycompname = self.modeler.components.create_npn(name, value, xpos, ypos,
-                                                                        use_instance_id_netlist=use_instance)
+                mycomp = self.modeler.schematic.create_npn(
+                    name, value, [xpos, ypos], use_instance_id_netlist=use_instance
+                )
             elif "transistor:PNP" in comptype:
-                mycomp, mycompname = self.modeler.components.create_pnp(name, value, xpos, ypos,
-                                                                        use_instance_id_netlist=use_instance)
+                mycomp = self.modeler.schematic.create_pnp(
+                    name, value, [xpos, ypos], use_instance_id_netlist=use_instance
+                )
             elif "diode:" in comptype:
-                mycomp, mycompname = self.modeler.components.create_diode(name, value, xpos, ypos,
-                                                                          use_instance_id_netlist=use_instance)
+                mycomp = self.modeler.schematic.create_diode(
+                    name, value, [xpos, ypos], use_instance_id_netlist=use_instance
+                )
 
             if mycomp:
-                pins = self.modeler.components.get_pins(mycomp)
                 id = 1
-                for pin in pins:
-                    pos = self.modeler.components.get_pin_location(mycomp, pin)
+                for pin in mycomp.pins:
+                    pos = pin.location
                     if pos[0] < xpos:
-                        angle = 6.28318530717959
+                        angle = 0.0
                     else:
-                        angle = 3.14159265358979
+                        angle = math.pi
                     netname = None
                     for net in nets:
                         net = [i.strip() for i in net]
                         if (name + "-" + str(id)) in net:
                             fullnetname = net[2]
                             netnames = fullnetname.split("/")
-                            netname = netnames[len(netnames) - 1].replace(",", "_").replace("'", "").replace("$",
-                                                                                                             "").strip()
+                            netname = (
+                                netnames[len(netnames) - 1].replace(",", "_").replace("'", "").replace("$", "").strip()
+                            )
                     if not netname:
                         prop = props[name]
                         if "Pin:" in prop and id in prop:
@@ -570,9 +476,9 @@ class Circuit(FieldAnalysisCircuit, object):
                             netname = netname.replace("$", "")
 
                     if netname:
-                        self.modeler.components.create_page_port(netname, pos[0], pos[1], angle)
+                        self.modeler.schematic.create_page_port(netname, [pos[0], pos[1]], angle)
                     else:
-                        self._messenger.add_info_message("Page Port Not Created", "Global")
+                        self.logger.info("Page Port Not Created")
                     id += 1
                 ypos += delta
                 if ypos > delta * (column_number):
@@ -583,17 +489,16 @@ class Circuit(FieldAnalysisCircuit, object):
             netname = el[2][1:-1]
             netname = netname.replace("$", "")
             if "GND" in netname.upper():
-                self.modeler.components.create_gnd(xpos, ypos)
+                self.modeler.schematic.create_gnd([xpos, ypos])
                 page_pos = ypos + 0.00254
-                id, name = self.modeler.components.create_page_port(
-                    netname, xpos, ypos, 6.28318530717959)
-                mod1 = self.modeler.components[id]
-                mod1.set_location(str(xpos) + "meter", str(page_pos) + "meter")
+                mod1 = self.modeler.schematic.create_page_port(netname, [xpos, ypos], 0.0)
+                mod1.location = [str(xpos) + "meter", str(page_pos) + "meter"]
                 ypos += delta
                 if ypos > delta * column_number:
                     xpos += delta
                     ypos = 0
 
+        self.logger.info("Netlist correctly imported into %s", self.design_name)
         return True
 
     @aedt_exception_handler
@@ -625,8 +530,9 @@ class Circuit(FieldAnalysisCircuit, object):
             return ""
 
     @aedt_exception_handler
-    def get_source_pin_names(self, source_design_name, source_project_name=None, source_project_path=None,
-                             port_selector=3):
+    def get_source_pin_names(
+        self, source_design_name, source_project_name=None, source_project_path=None, port_selector=3
+    ):
         """List the pin names.
 
         Parameters
@@ -638,7 +544,8 @@ class Circuit(FieldAnalysisCircuit, object):
         source_project_path : str, optional
             Path to the source project if different than the existing path. The default is ``None``.
         port_selector : int, optional
-             Type of the port. Options are ``1``, ``2``, or ``3``, corresponding respectively to ``"Wave Port"``, ``"Terminal"``, or ``"Circuit Port"``.
+             Type of the port. Options are ``1``, ``2``, or ``3``, corresponding respectively to ``"Wave Port"``,
+             ``"Terminal"``, or ``"Circuit Port"``.
              The default is ``3``, which is a circuit port.
 
         Returns
@@ -646,7 +553,19 @@ class Circuit(FieldAnalysisCircuit, object):
         list
             List of pin names.
 
+        References
+        ----------
+
+        >>> oModule.GetExcitationsOfType
         """
+        if source_project_name and self.project_name != source_project_name and not source_project_path:
+            raise AttributeError(
+                "If source project is different than the current one, " "``source_project_path`` must be also provided."
+            )
+        if source_project_path and not source_project_name:
+            raise AttributeError(
+                "When ``source_project_path`` is specified, " "``source_project_name`` must be also provided."
+            )
         if not source_project_name or self.project_name == source_project_name:
             oSrcProject = self._desktop.GetActiveProject()
         else:
@@ -664,7 +583,7 @@ class Circuit(FieldAnalysisCircuit, object):
         if not port:
             return False
         pins = list(oModule.GetExcitationsOfType(port))
-
+        self.logger.info("%s Excitations Pins found.", len(pins))
         return pins
 
     @aedt_exception_handler
@@ -683,44 +602,124 @@ class Circuit(FieldAnalysisCircuit, object):
         list
             List of ports.
 
+        References
+        ----------
+
+        >>> oDesign.ImportData
         """
         if filename[-2:] == "ts":
             with open(filename, "r") as f:
                 lines = f.readlines()
                 for i in lines:
                     if "[Number of Ports]" in i:
-                        ports = int(i[i.find("]") + 1:])
+                        ports = int(i[i.find("]") + 1 :])
                 portnames = [i.split(" = ")[1].strip() for i in lines if "! Port" in i[:9]]
                 if not portnames:
                     portnames = ["Port{}".format(i + 1) for i in range(ports)]
         else:
             re_filename = re.compile(r"\.s(?P<ports>\d+)+p", re.I)
             m = re_filename.search(filename)
-            ports = int(m.group('ports'))
+            ports = int(m.group("ports"))
             portnames = None
             with open(filename, "r") as f:
                 lines = f.readlines()
                 portnames = [i.split(" = ")[1].strip() for i in lines if "Port[" in i]
             if not portnames:
                 portnames = ["Port{}".format(i + 1) for i in range(ports)]
-        arg = ["NAME:NPortData", "Description:=", "", "ImageFile:=", "",
-               "SymbolPinConfiguration:=", 0, ["NAME:PortInfoBlk"], ["NAME:PortOrderBlk"],
-               "filename:=", filename, "numberofports:=", ports, "sssfilename:=", "",
-               "sssmodel:=", False, "PortNames:=", portnames,
-               "domain:=", "frequency", "datamode:=", "Link", "devicename:=", "",
-               "SolutionName:=", solution_name, "displayformat:=", "MagnitudePhase", "datatype:=", "SMatrix",
-               ["NAME:DesignerCustomization",
-                "DCOption:=", 0, "InterpOption:=", 0, "ExtrapOption:=", 1,
-                "Convolution:=", 0, "Passivity:=", 0, "Reciprocal:=", False,
-                "ModelOption:=", "", "DataType:=", 1],
-               ["NAME:NexximCustomization", "DCOption:=", 3, "InterpOption:=", 1,
-                "ExtrapOption:=", 3, "Convolution:=", 0, "Passivity:=", 0,
-                "Reciprocal:=", False, "ModelOption:=", "", "DataType:=", 2],
-               ["NAME:HSpiceCustomization", "DCOption:=", 1, "InterpOption:=", 2,
-                "ExtrapOption:=", 3, "Convolution:=", 0, "Passivity:=", 0,
-                "Reciprocal:=", False, "ModelOption:=", "", "DataType:=", 3],
-               "NoiseModelOption:=", "External"]
+        arg = [
+            "NAME:NPortData",
+            "Description:=",
+            "",
+            "ImageFile:=",
+            "",
+            "SymbolPinConfiguration:=",
+            0,
+            ["NAME:PortInfoBlk"],
+            ["NAME:PortOrderBlk"],
+            "filename:=",
+            filename,
+            "numberofports:=",
+            ports,
+            "sssfilename:=",
+            "",
+            "sssmodel:=",
+            False,
+            "PortNames:=",
+            portnames,
+            "domain:=",
+            "frequency",
+            "datamode:=",
+            "Link",
+            "devicename:=",
+            "",
+            "SolutionName:=",
+            solution_name,
+            "displayformat:=",
+            "MagnitudePhase",
+            "datatype:=",
+            "SMatrix",
+            [
+                "NAME:DesignerCustomization",
+                "DCOption:=",
+                0,
+                "InterpOption:=",
+                0,
+                "ExtrapOption:=",
+                1,
+                "Convolution:=",
+                0,
+                "Passivity:=",
+                0,
+                "Reciprocal:=",
+                False,
+                "ModelOption:=",
+                "",
+                "DataType:=",
+                1,
+            ],
+            [
+                "NAME:NexximCustomization",
+                "DCOption:=",
+                3,
+                "InterpOption:=",
+                1,
+                "ExtrapOption:=",
+                3,
+                "Convolution:=",
+                0,
+                "Passivity:=",
+                0,
+                "Reciprocal:=",
+                False,
+                "ModelOption:=",
+                "",
+                "DataType:=",
+                2,
+            ],
+            [
+                "NAME:HSpiceCustomization",
+                "DCOption:=",
+                1,
+                "InterpOption:=",
+                2,
+                "ExtrapOption:=",
+                3,
+                "Convolution:=",
+                0,
+                "Passivity:=",
+                0,
+                "Reciprocal:=",
+                False,
+                "ModelOption:=",
+                "",
+                "DataType:=",
+                3,
+            ],
+            "NoiseModelOption:=",
+            "External",
+        ]
         self.odesign.ImportData(arg, "", True)
+        self.logger.info("Touchstone correctly imported into %s", self.design_name)
         return portnames
 
     @aedt_exception_handler
@@ -747,23 +746,25 @@ class Circuit(FieldAnalysisCircuit, object):
         bool
             ``True`` when successful, ``False`` when failed.
 
+        References
+        ----------
+
+        >>> oDesign.ExportNetworkData
         """
         # Normalize the save path
         if not filename:
             appendix = ""
             for v, vv in zip(variation, variations_value):
-                appendix += "_" + v + vv.replace("\'", "")
+                appendix += "_" + v + vv.replace("'", "")
             ext = ".S" + str(self.oboundary.GetNumExcitations()) + "p"
-            filename = os.path.join(self.project_path, solutionname + \
-                                    "_" + sweepname + appendix + ext)
+            filename = os.path.join(self.project_path, solutionname + "_" + sweepname + appendix + ext)
         else:
             filename = filename.replace("//", "/").replace("\\", "/")
-        print("Exporting Touchstone " + filename)
+        self.logger.info("Exporting Touchstone " + filename)
         DesignVariations = ""
         i = 0
         for el in variation:
-            DesignVariations += str(variation[i]) + "=\'" + \
-                                    str(variations_value[i].replace("\'", "")) + "\' "
+            DesignVariations += str(variation[i]) + "='" + str(variations_value[i].replace("'", "")) + "' "
             i += 1
             # DesignVariations = "$AmbientTemp=\'22cel\' $PowerIn=\'100\'"
         # array containing "SetupName:SolutionName" pairs (note that setup and solution are separated by a colon)
@@ -783,16 +784,39 @@ class Circuit(FieldAnalysisCircuit, object):
         IncludeGammaImpedance = True  # Include Gamma and Impedance in comments
         NonStandardExtensions = False  # Support for non-standard Touchstone extensions
 
-        self.odesign.ExportNetworkData(DesignVariations, SolutionSelectionArray, FileFormat,
-                                         OutFile, FreqsArray, DoRenorm, RenormImped, DataType, Pass,
-                                         ComplexFormat, DigitsPrecision, False, IncludeGammaImpedance,
-                                         NonStandardExtensions)
+        self.odesign.ExportNetworkData(
+            DesignVariations,
+            SolutionSelectionArray,
+            FileFormat,
+            OutFile,
+            FreqsArray,
+            DoRenorm,
+            RenormImped,
+            DataType,
+            Pass,
+            ComplexFormat,
+            DigitsPrecision,
+            False,
+            IncludeGammaImpedance,
+            NonStandardExtensions,
+        )
+        self.logger.info("Touchstone correctly exported to %s", filename)
         return True
 
     @aedt_exception_handler
-    def export_fullwave_spice(self, designname=None, setupname=None, is_solution_file=False, filename=None,
-                              passivity=False, causality=False, renormalize=False, impedance=50, error=0.5,
-                              poles=10000):
+    def export_fullwave_spice(
+        self,
+        designname=None,
+        setupname=None,
+        is_solution_file=False,
+        filename=None,
+        passivity=False,
+        causality=False,
+        renormalize=False,
+        impedance=50,
+        error=0.5,
+        poles=10000,
+    ):
         """
         Export a full wave HSpice file using NDE.
 
@@ -806,22 +830,22 @@ class Circuit(FieldAnalysisCircuit, object):
             The default is ``None``.
         setupname : str, optional
             Name of the setup if it is a design. The default is ``None``.
-        is_solution_file: bool, optional
+        is_solution_file : bool, optional
             Whether it is an imported solution file. The default is ``False``.
-        filename: str, optional
+        filename : str, optional
             Full path and name for exporting the HSpice file. The default is ``None``.
-        passivity: bool, optional
+        passivity : bool, optional
             Whether to compute the passivity. The default is ``False``.
-        causality: bool, optional
+        causality : bool, optional
             Whether to compute the causality. The default is ``False``.
-        renormalize: bool, optional
+        renormalize : bool, optional
             Whether to renormalize the S-matrix to a specific port impedance.
             The default is ``False``.
-        impedance: float, optional
+        impedance : float, optional
             Impedance value if ``renormalize=True``. The default is ``50``.
-        error: float, optional
+        error : float, optional
             Fitting error. The default is ``0.5``.
-        poles: int, optional
+        poles : int, optional
             Number of fitting poles. The default is ``10000``.
 
         Returns
@@ -829,6 +853,10 @@ class Circuit(FieldAnalysisCircuit, object):
         str
             Name of the HSpice file if the export is successful.
 
+        References
+        ----------
+
+        >>> oDesign.ExportFullWaveSpice
         """
         if not designname:
             designname = self.design_name
@@ -840,40 +868,79 @@ class Circuit(FieldAnalysisCircuit, object):
         else:
             if not setupname:
                 setupname = self.nominal_sweep
-        self.onetwork_data_explorer.ExportFullWaveSpice(designname, is_solution_file, setupname, "",
-                                                        [],
-                                                        ["NAME:SpiceData", "SpiceType:=", "HSpice",
-                                                         "EnforcePassivity:=", passivity, "EnforceCausality:=",
-                                                         causality,
-                                                         "UseCommonGround:=", True,
-                                                         "ShowGammaComments:=", True,
-                                                         "Renormalize:=", renormalize,
-                                                         "RenormImpedance:=", impedance,
-                                                         "FittingError:=", error,
-                                                         "MaxPoles:=", poles,
-                                                         "PassivityType:=", "IteratedFittingOfPV",
-                                                         "ColumnFittingType:=", "Matrix",
-                                                         "SSFittingType:=", "FastFit",
-                                                         "RelativeErrorToleranc:=", False,
-                                                         "EnsureAccurateZfit:=", True,
-                                                         "TouchstoneFormat:=", "MA",
-                                                         "TouchstoneUnits:=", "GHz",
-                                                         "TouchStonePrecision:=", 15,
-                                                         "SubcircuitName:=", "",
-                                                         "SYZDataInAutoMode:=", False,
-                                                         "ExportDirectory:=", os.path.dirname(
-                                                             filename) + "\\",
-                                                         "ExportSpiceFileName:=", os.path.basename(
-                                                             filename),
-                                                         "FullwaveSpiceFileName:=",
-                                                         os.path.basename(
-                                                             filename), "UseMultipleCores:=",
-                                                         True, "NumberOfCores:=", 20])
+        self.onetwork_data_explorer.ExportFullWaveSpice(
+            designname,
+            is_solution_file,
+            setupname,
+            "",
+            [],
+            [
+                "NAME:SpiceData",
+                "SpiceType:=",
+                "HSpice",
+                "EnforcePassivity:=",
+                passivity,
+                "EnforceCausality:=",
+                causality,
+                "UseCommonGround:=",
+                True,
+                "ShowGammaComments:=",
+                True,
+                "Renormalize:=",
+                renormalize,
+                "RenormImpedance:=",
+                impedance,
+                "FittingError:=",
+                error,
+                "MaxPoles:=",
+                poles,
+                "PassivityType:=",
+                "IteratedFittingOfPV",
+                "ColumnFittingType:=",
+                "Matrix",
+                "SSFittingType:=",
+                "FastFit",
+                "RelativeErrorToleranc:=",
+                False,
+                "EnsureAccurateZfit:=",
+                True,
+                "TouchstoneFormat:=",
+                "MA",
+                "TouchstoneUnits:=",
+                "GHz",
+                "TouchStonePrecision:=",
+                15,
+                "SubcircuitName:=",
+                "",
+                "SYZDataInAutoMode:=",
+                False,
+                "ExportDirectory:=",
+                os.path.dirname(filename) + "\\",
+                "ExportSpiceFileName:=",
+                os.path.basename(filename),
+                "FullwaveSpiceFileName:=",
+                os.path.basename(filename),
+                "UseMultipleCores:=",
+                True,
+                "NumberOfCores:=",
+                20,
+            ],
+        )
+        self.logger.info("FullWaveSpice correctly exported to %s", filename)
+
         return filename
 
     @aedt_exception_handler
-    def create_touchstone_report(self, plot_name, curvenames, solution_name=None, variation_dict=None):
-        """Create a Touchstone plot.
+    def create_touchstone_report(
+        self,
+        plot_name,
+        curvenames,
+        solution_name=None,
+        variation_dict=None,
+        subdesign_id=None,
+    ):
+        """
+        Create a Touchstone plot.
 
         Parameters
         ----------
@@ -885,12 +952,18 @@ class Circuit(FieldAnalysisCircuit, object):
             Name of the solution. The default value is ``None``.
         variation_dict : dict, optional
             Dictionary of variation names. The default value is ``None``.
+        subdesign_id : int, optional
+            Specify a SubDesign ID to export a touchstone of this Subdesign. The default value is ``None``.
 
         Returns
         -------
         bool
            ``True`` when successful, ``False`` when failed.
 
+        References
+        ----------
+
+        >>> oModule.CreateReport
         """
         if not solution_name:
             solution_name = self.nominal_sweep
@@ -898,9 +971,14 @@ class Circuit(FieldAnalysisCircuit, object):
         if variation_dict:
             for el in variation_dict:
                 variations[el] = [variation_dict[el]]
-        ctxt = ["NAME:Context", "SimValueContext:=",[
-            3, 0, 2, 0, False, False, -1, 1, 0, 1, 1, "", 0, 0]]
-        return self.post.create_rectangular_plot(curvenames,solution_name, variations, plotname=plot_name, context=ctxt)
+        ctxt = ["NAME:Context", "SimValueContext:=", [3, 0, 2, 0, False, False, -1, 1, 0, 1, 1, "", 0, 0]]
+        if subdesign_id:
+            ctxt_temp = ["NUMLEVELS", False, "0", "SUBDESIGNID", False, str(subdesign_id)]
+            for el in ctxt_temp: ctxt[2].append(el)
+
+        return self.post.create_rectangular_plot(
+            curvenames, solution_name, variations, plotname=plot_name, context=ctxt
+        )
 
     @aedt_exception_handler
     def get_touchstone_data(self, curvenames, solution_name=None, variation_dict=None):
@@ -917,9 +995,13 @@ class Circuit(FieldAnalysisCircuit, object):
 
         Returns
         -------
-        :class: `pyaedt.modules.PostProcessor.SolutionData`
+        :class:`pyaedt.modules.PostProcessor.SolutionData`
            Class containing all Requested Data
 
+        References
+        ----------
+
+        >>> oModule.GetSolutionDataPerVariation
         """
         if not solution_name:
             solution_name = self.nominal_sweep
@@ -927,6 +1009,411 @@ class Circuit(FieldAnalysisCircuit, object):
         if variation_dict:
             for el in variation_dict:
                 variations[el] = [variation_dict[el]]
-        ctxt = ["NAME:Context", "SimValueContext:=", [
-            3, 0, 2, 0, False, False, -1, 1, 0, 1, 1, "", 0, 0]]
+        ctxt = ["NAME:Context", "SimValueContext:=", [3, 0, 2, 0, False, False, -1, 1, 0, 1, 1, "", 0, 0]]
         return self.post.get_solution_data_per_variation("Standard", solution_name, ctxt, variations, curvenames)
+
+    @aedt_exception_handler
+    def push_excitations(self, instance_name, thevenin_calculation=False, setup_name="LinearFrequency"):
+        """Push excitations.
+
+        Parameters
+        ----------
+        instance_name : str
+            Name of the instance.
+        thevenin_calculation : bool, optional
+            Whether to perform the Thevenin equivalent calculation. The default is ``False``.
+        setup_name : str
+            Name of the solution setup to push.
+
+        Returns
+        -------
+        bool
+            ``True`` when successful, ``False`` when failed.
+
+        References
+        ----------
+
+        >>> oEditor.PushExcitations
+        """
+        arg = ["NAME:options", "CalcThevenin:=", thevenin_calculation, "Sol:=", setup_name]
+
+        self.modeler.oeditor.PushExcitations(instance_name, arg)
+        return True
+
+    @aedt_exception_handler
+    def assign_voltage_sinusoidal_excitation_to_ports(self, ports, settings):
+        """Assign a voltage sinusoidal excitation to circuit ports.
+
+        Parameters
+        ----------
+        ports : list
+            List of circuit ports to assign to the sinusoidal excitation.
+        settings : list
+            List of parameter values to use in voltage sinusoidal excitation creation.
+            All settings must be provided as strings.
+            An empty string (``""``) sets the parameter to its default.
+
+            Values are given in this order:
+
+            * 0: AC magnitude for small-signal analysis. For example ``"33V"``. Default = "nan V".
+            * 1: AC phase for small-signal analysis. For example ``"44deg"``. Default = "0deg".
+            * 2: DC voltage. For example ``"1V"``. Default = "0V"
+            * 3: Voltage offset from zero. For example ``"1V"``. Default = "0V".
+            * 4: Voltage amplitude. For example ``"3V"``. Default = "0V".
+            * 5: Frequency. For example ``"15GHz"``. Default = "1GHz".
+            * 6: Delay to start of sine wave. For example ``"16s"``. Default = "0s".
+            * 7: Damping factor (1/seconds). For example ``"2"``. Default = "0".
+            * 8: Phase delay. For example ``"18deg"``. Default = "0deg".
+            * 9: Frequency to use for harmonic balance analysis. For example ``"20Hz"``. Default = "0Hz".
+
+        Returns
+        -------
+        bool
+            ``True`` when successful, ``False`` when failed.
+
+        References
+        ----------
+
+        >>> oDesign.UpdateSources
+        """
+        # setting the defaults if no value is provided
+        defaults = ["nan V", "0deg", "0V", "0V", "0V", "1GHz", "0s", "0", "0deg", "0Hz"]
+        for i in range(len(settings)):
+            if settings[i] == "":
+                settings[i] = defaults[i]
+
+        id = self.modeler.schematic.create_unique_id()
+
+        arg1 = [
+            "NAME:NexximSources",
+            [
+                "NAME:NexximSources",
+                [
+                    "NAME:Data",
+                    [
+                        "NAME:VoltageSinusoidal" + str(id),
+                        "DataId:=",
+                        "Source" + str(id),
+                        "Type:=",
+                        1,
+                        "Output:=",
+                        0,
+                        "NumPins:=",
+                        2,
+                        "Netlist:=",
+                        (
+                            "V@ID %0 %1 *DC(DC=@DC) SIN(?VO(@VO) ?VA(@VA) ?FREQ(@FREQ) ?TD(@TD) ?ALPHA(@ALPHA) "
+                            "?THETA(@THETA)) *TONE(TONE=@TONE) *ACMAG(AC @ACMAG @ACPHASE)"
+                        ),
+                        "CompName:=",
+                        "Nexxim Circuit Elements\\Independent Sources:V_SIN",
+                        "FDSFileName:=",
+                        "",
+                        [
+                            "NAME:Properties",
+                            "TextProp:=",
+                            ["LabelID", "HD", "Property string for netlist ID", "V@ID"],
+                            "ValueProp:=",
+                            ["ACMAG", "OD", "AC magnitude for small-signal analysis (Volts)", settings[0], 0],
+                            "ValuePropNU:=",
+                            ["ACPHASE", "OD", "AC phase for small-signal analysis", settings[1], 0, "deg"],
+                            "ValueProp:=",
+                            ["DC", "OD", "DC voltage (Volts)", settings[2], 0],
+                            "ValueProp:=",
+                            ["VO", "OD", "Voltage offset from zero (Volts)", settings[3], 0],
+                            "ValueProp:=",
+                            ["VA", "OD", "Voltage amplitude (Volts)", settings[4], 0],
+                            "ValueProp:=",
+                            ["FREQ", "OD", "Frequency (Hz)", settings[5], 0],
+                            "ValueProp:=",
+                            ["TD", "OD", "Delay to start of sine wave (seconds)", settings[6], 0],
+                            "ValueProp:=",
+                            ["ALPHA", "OD", "Damping factor (1/seconds)", settings[7], 0],
+                            "ValuePropNU:=",
+                            ["THETA", "OD", "Phase delay", settings[8], 0, "deg"],
+                            "ValueProp:=",
+                            [
+                                "TONE",
+                                "OD",
+                                (
+                                    "Frequency (Hz) to use for harmonic balance analysis, should be a submultiple of "
+                                    "(or equal to) the driving frequency and should also be included in the "
+                                    "HB analysis setup"
+                                ),
+                                settings[9],
+                                0,
+                            ],
+                            "TextProp:=",
+                            ["ModelName", "SHD", "", "V_SIN"],
+                            "MenuProp:=",
+                            ["CoSimulator", "D", "", "DefaultNetlist", 0],
+                            "ButtonProp:=",
+                            ["CosimDefinition", "D", "", "", "Edit", 40501, "ButtonPropClientData:=", []],
+                        ],
+                    ],
+                ],
+            ],
+        ]
+
+        arg2 = ["NAME:ComponentConfigurationData"]
+
+        arg3 = ["NAME:ComponentConfigurationData", ["NAME:EnabledPorts", "VoltageSinusoidal" + str(id) + ":=", ports]]
+
+        arg2.append(arg3)
+
+        self.odesign.UpdateSources(arg1, arg2)
+        self.logger.info("Voltage Source updated correctly.")
+        return True
+
+    @aedt_exception_handler
+    def assign_current_sinusoidal_excitation_to_ports(self, ports, settings):
+        """Assign a current sinusoidal excitation to circuit ports.
+
+        Parameters
+        ----------
+        ports : list
+            List of circuit ports to assign to the sinusoidal excitation.
+        settings : list
+            List of parameter values to use in voltage sinusoidal excitation creation.
+            All settings must be provided as strings.
+            An empty string (``""``) sets the parameter to its default.
+
+            Values are given in this order:
+
+            * 0: AC magnitude for small-signal analysis. For example ``"33A"``. Default = "nan A".
+            * 1: AC phase for small-signal analysis. For example ``"44deg"``. Default = "0deg".
+            * 2: DC voltage. For example ``"1A"``. Default = "0A"
+            * 3: Current offset from zero. For example ``"1A"``. Default = "0A".
+            * 4: Current amplitude. For example ``"3A"``. Default = "0A".
+            * 5: Frequency. For example ``"15GHz"``. Default = "1GHz".
+            * 6: Delay to start of sine wave. For example ``"16s"``. Default = "0s".
+            * 7: Damping factor (1/seconds). For example ``"2"``. Default = "0".
+            * 8: Phase delay. For example ``"18deg"``. Default = "0deg".
+            * 9: Multiplier for simulating multiple parallel current sources. For example ``"4"``. Default = "1".
+            * 10: Frequency to use for harmonic balance analysis. For example ``"20Hz"``. Default = "0Hz".
+
+        Returns
+        -------
+        bool
+            ``True`` when successful, ``False`` when failed.
+
+        References
+        ----------
+
+        >>> oDesign.UpdateSources
+        """
+        # setting the defaults if no value is provided
+        defaults = ["nan A", "0deg", "0A", "0A", "0A", "1GHz", "0s", "0", "0deg", "1", "0Hz"]
+        for i in range(len(settings)):
+            if settings[i] == "":
+                settings[i] = defaults[i]
+
+        id = self.modeler.schematic.create_unique_id()
+
+        arg1 = [
+            "NAME:NexximSources",
+            [
+                "NAME:NexximSources",
+                [
+                    "NAME:Data",
+                    [
+                        "NAME:CurrentSinusoidal" + str(id),
+                        "DataId:=",
+                        "Source" + str(id),
+                        "Type:=",
+                        1,
+                        "Output:=",
+                        1,
+                        "NumPins:=",
+                        2,
+                        "Netlist:=",
+                        (
+                            "I@ID %0 %1 *DC(DC=@DC) SIN(?VO(@VO) ?VA(@VA) ?FREQ(@FREQ) ?TD(@TD) ?ALPHA(@ALPHA) "
+                            "?THETA(@THETA) *M(M=@M)) *TONE(TONE=@TONE) *ACMAG(AC @ACMAG @ACPHASE)"
+                        ),
+                        "CompName:=",
+                        "Nexxim Circuit Elements\\Independent Sources:I_SIN",
+                        "FDSFileName:=",
+                        "",
+                        [
+                            "NAME:Properties",
+                            "TextProp:=",
+                            ["LabelID", "HD", "Property string for netlist ID", "I@ID"],
+                            "ValueProp:=",
+                            ["ACMAG", "OD", "AC magnitude for small-signal analysis (Amps)", settings[0], 0],
+                            "ValuePropNU:=",
+                            ["ACPHASE", "OD", "AC phase for small-signal analysis", settings[1], 0, "deg"],
+                            "ValueProp:=",
+                            ["DC", "OD", "DC current (Amps)", settings[2], 0],
+                            "ValueProp:=",
+                            ["VO", "OD", "Current offset (Amps)", settings[3], 0],
+                            "ValueProp:=",
+                            ["VA", "OD", "Current amplitude (Amps)", settings[4], 0],
+                            "ValueProp:=",
+                            ["FREQ", "OD", "Frequency (Hz)", settings[5], 0],
+                            "ValueProp:=",
+                            ["TD", "OD", "Delay to start of sine wave (seconds)", settings[6], 0],
+                            "ValueProp:=",
+                            ["ALPHA", "OD", "Damping factor (1/seconds)", settings[7], 0],
+                            "ValuePropNU:=",
+                            ["THETA", "OD", "Phase delay", settings[8], 0, "deg"],
+                            "ValueProp:=",
+                            ["M", "OD", "Multiplier for simulating multiple parallel current sources", settings[9], 0],
+                            "ValueProp:=",
+                            [
+                                "TONE",
+                                "OD",
+                                "Frequency (Hz) to use for harmonic balance analysis, should be a submultiple of "
+                                "(or equal to) the driving frequency and should also be included in the "
+                                "HB analysis setup",
+                                settings[10],
+                                0,
+                            ],
+                            "TextProp:=",
+                            ["ModelName", "SHD", "", "I_SIN"],
+                            "MenuProp:=",
+                            ["CoSimulator", "D", "", "DefaultNetlist", 0],
+                            "ButtonProp:=",
+                            ["CosimDefinition", "D", "", "", "Edit", 40501, "ButtonPropClientData:=", []],
+                        ],
+                    ],
+                ],
+            ],
+        ]
+
+        arg2 = ["NAME:ComponentConfigurationData"]
+
+        arg3 = ["NAME:ComponentConfigurationData", ["NAME:EnabledPorts", "CurrentSinusoidal" + str(id) + ":=", ports]]
+
+        arg2.append(arg3)
+
+        self.odesign.UpdateSources(arg1, arg2)
+        self.logger.info("Current Source updated correctly.")
+
+        return True
+
+    @aedt_exception_handler
+    def assign_power_sinusoidal_excitation_to_ports(self, ports, settings):
+        """Assign a power sinusoidal excitation to circuit ports.
+
+        Parameters
+        ----------
+        ports : list
+            List of circuit ports to assign to the sinusoidal excitation.
+        settings : list
+            List of parameter values to use in power sinusoidal excitation creation.
+            All settings must be provided as strings.
+            An empty string (``""``) sets the parameter to its default.
+
+            Values are given in this order:
+
+            * 0: AC magnitude for small-signal analysis. For example ``"33V"``. Default = "nan V".
+            * 1: AC phase for small-signal analysis. For example ``"44deg"``. Default = "0deg".
+            * 2: DC voltage. For example ``"1V"``. Default = "0V"
+            * 3: Power offset from zero watts. For example ``"1W"``. Default = "0W".
+            * 4: Available power of the source above VO. For example ``"3W"``. Default = "0W".
+            * 5: Frequency. For example ``"15GHz"``. Default = "1GHz".
+            * 6: Delay to start of sine wave. For example ``"16s"``. Default = "0s".
+            * 7: Damping factor (1/seconds). For example ``"2"``. Default = "0".
+            * 8: Phase delay. For example ``"18deg"``. Default = "0deg".
+            * 9: Frequency to use for harmonic balance analysis. For example ``"20Hz"``. Default = "0Hz".
+
+        Returns
+        -------
+        bool
+            ``True`` when successful, ``False`` when failed.
+
+        References
+        ----------
+
+        >>> oDesign.UpdateSources
+        """
+        # setting the defaults if no value is provided
+        defaults = ["nan V", "0deg", "0V", "0W", "0W", "1GHz", "0s", "0", "0deg", "0Hz"]
+        for i in range(len(settings)):
+            if settings[i] == "":
+                settings[i] = defaults[i]
+
+        id = self.modeler.schematic.create_unique_id()
+
+        arg1 = [
+            "NAME:NexximSources",
+            [
+                "NAME:NexximSources",
+                [
+                    "NAME:Data",
+                    [
+                        "NAME:PowerSinusoidal" + str(id),
+                        "DataId:=",
+                        "Source" + str(id),
+                        "Type:=",
+                        1,
+                        "Output:=",
+                        2,
+                        "NumPins:=",
+                        2,
+                        "Netlist:=",
+                        (
+                            "V@ID %0 %1 *DC(DC=@DC) POWER SIN(?VO(@VO) ?POWER(@POWER) ?FREQ(@FREQ) ?TD(@TD) "
+                            "?ALPHA(@ALPHA) ?THETA(@THETA)) *TONE(TONE=@TONE) *ACMAG(AC @ACMAG @ACPHASE)"
+                        ),
+                        "CompName:=",
+                        "Nexxim Circuit Elements\\Independent Sources:P_SIN",
+                        "FDSFileName:=",
+                        "",
+                        [
+                            "NAME:Properties",
+                            "TextProp:=",
+                            ["LabelID", "HD", "Property string for netlist ID", "V@ID"],
+                            "ValueProp:=",
+                            ["ACMAG", "OD", "AC magnitude for small-signal analysis (Volts)", settings[0], 0],
+                            "ValuePropNU:=",
+                            ["ACPHASE", "OD", "AC phase for small-signal analysis", settings[1], 0, "deg"],
+                            "ValueProp:=",
+                            ["DC", "OD", "DC voltage (Volts)", settings[2], 0],
+                            "ValuePropNU:=",
+                            ["VO", "OD", "Power offset from zero watts", settings[3], 0, "W"],
+                            "ValueProp:=",
+                            ["POWER", "OD", "Available power of the source above VO", settings[4], 0],
+                            "ValueProp:=",
+                            ["FREQ", "OD", "Frequency (Hz)", settings[5], 0],
+                            "ValueProp:=",
+                            ["TD", "OD", "Delay to start of sine wave (seconds)", settings[6], 0],
+                            "ValueProp:=",
+                            ["ALPHA", "OD", "Damping factor (1/seconds)", settings[7], 0],
+                            "ValuePropNU:=",
+                            ["THETA", "OD", "Phase delay", settings[8], 0, "deg"],
+                            "ValueProp:=",
+                            [
+                                "TONE",
+                                "OD",
+                                (
+                                    "Frequency (Hz) to use for harmonic balance analysis, should be a submultiple of "
+                                    "(or equal to) the driving frequency and should also be included in the "
+                                    "HB analysis setup"
+                                ),
+                                settings[9],
+                                0,
+                            ],
+                            "TextProp:=",
+                            ["ModelName", "SHD", "", "P_SIN"],
+                            "ButtonProp:=",
+                            ["CosimDefinition", "D", "", "Edit", "Edit", 40501, "ButtonPropClientData:=", []],
+                            "MenuProp:=",
+                            ["CoSimulator", "D", "", "DefaultNetlist", 0],
+                        ],
+                    ],
+                ],
+            ],
+        ]
+
+        arg2 = ["NAME:ComponentConfigurationData"]
+
+        arg3 = ["NAME:ComponentConfigurationData", ["NAME:EnabledPorts", "PowerSinusoidal" + str(id) + ":=", ports]]
+
+        arg2.append(arg3)
+
+        self.odesign.UpdateSources(arg1, arg2)
+        self.logger.info("Power Source updated correctly.")
+
+        return True

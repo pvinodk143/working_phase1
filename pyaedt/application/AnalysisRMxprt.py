@@ -1,7 +1,8 @@
-from ..generic.general_methods import aedt_exception_handler, generate_unique_name
-from .Analysis import Analysis
-from .Design import design_solutions
-from ..modeler.Model2D import ModelerRMxprt
+from pyaedt.generic.general_methods import aedt_exception_handler
+from pyaedt.modeler.Model2D import ModelerRMxprt
+from pyaedt.application.Analysis import Analysis
+from pyaedt.application.Design import design_solutions
+from pyaedt.modules.PostProcessor import CircuitPostProcessor
 
 
 class FieldAnalysisRMxprt(Analysis):
@@ -36,12 +37,35 @@ class FieldAnalysisRMxprt(Analysis):
         except:
             pass
 
-    def __init__(self, application, projectname, designname, solution_type, setup_name=None,
-                 specified_version=None, NG=False, AlwaysNew=False, release_on_exit=False, student_version=False):
-        Analysis.__init__(self, application, projectname, designname, solution_type, setup_name,
-                          specified_version, NG, AlwaysNew, release_on_exit, student_version)
+    def __init__(
+        self,
+        application,
+        projectname,
+        designname,
+        solution_type,
+        setup_name=None,
+        specified_version=None,
+        non_graphical=False,
+        new_desktop_session=False,
+        close_on_exit=False,
+        student_version=False,
+    ):
+        Analysis.__init__(
+            self,
+            application,
+            projectname,
+            designname,
+            solution_type,
+            setup_name,
+            specified_version,
+            non_graphical,
+            new_desktop_session,
+            close_on_exit,
+            student_version,
+        )
+
         self._modeler = ModelerRMxprt(self)
-        #self._post = PostProcessor(self)
+        self._post = CircuitPostProcessor(self)
 
     @property
     def modeler(self):
@@ -49,7 +73,7 @@ class FieldAnalysisRMxprt(Analysis):
 
         Returns
         -------
-        :class: `pyaedt.modules.Modeler`
+        :class:`pyaedt.modules.Modeler`
 
         """
         return self._modeler
@@ -74,7 +98,7 @@ class FieldAnalysisRMxprt(Analysis):
         return True
 
     @aedt_exception_handler
-    def enable_modelcreation(self, solution_type = None):
+    def enable_modelcreation(self, solution_type=None):
         """Enable model creation for the Maxwell model wizard.
 
         Parameters
@@ -91,6 +115,7 @@ class FieldAnalysisRMxprt(Analysis):
         self._design_type = "ModelCreation"
         self.solution_type = solution_type
         return True
+
     # @property
     # def mesh(self):
     #     return self._mesh
@@ -101,7 +126,8 @@ class FieldAnalysisRMxprt(Analysis):
 
     @aedt_exception_handler
     def _check_solution_consistency(self):
-        """Check solution consistency."""
+        """Check solution consistency.
+        """
         if self._solution_type:
             return self._odesign.GetSolutionType() == self._solution_type
         else:

@@ -1,67 +1,60 @@
 from __future__ import absolute_import
-import warnings
-from .general import *
-from ..generic.general_methods import get_filename_without_extension, generate_unique_name
 
-try:
-    import clr
-    from System import Convert, String
-    from System import Double, Array
-    from System.Collections.Generic import List
-except ImportError:
-    warnings.warn('This module requires pythonnet.')
+from pyaedt.generic.general_methods import aedt_exception_handler, generate_unique_name
 
 
 class EdbNets(object):
-    """Manages EDB functionalities  for nets."""
+    """Manages EDB functionalities for nets.
 
-    def __init__(self, parent):
-        self.parent = parent
+    Examples
+    --------
+    >>> from pyaedt import Edb
+    >>> edbapp = Edb("myaedbfolder", edbversion="2021.2")
+    >>> edb_nets = edbapp.core_nets
+    """
+
+    def __init__(self, p_edb):
+        self._pedb = p_edb
 
     @property
     def _builder(self):
         """ """
-        return self.parent.builder
+        return self._pedb.builder
 
     @property
     def _edb(self):
         """ """
-        return self.parent.edb
-
-    @property
-    def _edb_value(self):
-        """ """
-        return self.parent.edb_value
+        return self._pedb.edb
 
     @property
     def _active_layout(self):
         """ """
-        return self.parent.active_layout
+        return self._pedb.active_layout
 
     @property
     def _cell(self):
         """ """
-        return self.parent.cell
+        return self._pedb.cell
 
     @property
     def db(self):
         """Db object."""
-        return self.parent.db
+        return self._pedb.db
 
     @property
     def _padstack_methods(self):
         """ """
-        return self.parent.edblib.Layout.PadStackMethods
+        return self._pedb.edblib.Layout.PadStackMethods
 
     @property
-    def _messenger(self):
-        """ """
-        return self.parent._messenger
+    def _logger(self):
+        """Edb logger."""
+        return self._pedb.logger
 
     @property
     def _nets_methods(self):
         """ """
-        return self.parent.edblib.Layout.NetsMethods
+        return self._pedb.edblib.Layout.NetsMethods
 
     @property
     def nets(self):
@@ -72,8 +65,10 @@ class EdbNets(object):
         dict
             Dictionary of nets.
         """
-        if self._builder:
-            return convert_netdict_to_pydict(self._nets_methods.GetNetDict(self._builder))
+        nets = {}
+        for net in self._active_layout.Nets:
+            nets[net.GetName()] = net
+        return nets
 
     @property
     def signal_nets(self):
@@ -84,8 +79,11 @@ class EdbNets(object):
         dict
             Dictionary of signal nets.
         """
-        if self._builder:
-            return convert_netdict_to_pydict(self._nets_methods.GetSignalNetDict(self._builder))
+        nets = {}
+        for net, value in self.nets.items():
+            if not value.IsPowerGround():
+                nets[net] = value
+        return nets
 
     @property
     def power_nets(self):
@@ -96,8 +94,11 @@ class EdbNets(object):
         dict
             Dictionary of power nets.
         """
-        if self._builder:
-            return convert_netdict_to_pydict(self._nets_methods.GetPowerNetDict(self._builder))
+        nets = {}
+        for net, value in self.nets.items():
+            if value.IsPowerGround():
+                nets[net] = value
+        return nets
 
     @aedt_exception_handler
     def is_power_gound_net(self, netname_list):
@@ -113,9 +114,15 @@ class EdbNets(object):
         bool
             ``True`` when one of the net names is ``"power"`` or ``"ground"``, ``False`` otherwise.
         """
-        if self._builder:
-            return self._nets_methods.IsPowerGroundNetInList(self._builder, netname_list)
+        if isinstance(netname_list, str):
+            netname_list = [netname_list]
+        power_nets_names = list(self.power_nets.keys())
+        for netname in netname_list:
+            if netname in power_nets_names:
+                return True
+        return False
 
+    @aedt_exception_handler
     def get_dcconnected_net_list(self, ground_nets=["GND"]):
         """Retrieve the nets connected to DC through inductors.
 
@@ -133,7 +140,7 @@ class EdbNets(object):
             List of nets connected to DC through inductors.
         """
         temp_list = []
-        for refdes, comp_obj in self.parent.core_components.inductors.items():
+        for refdes, comp_obj in self._pedb.core_components.inductors.items():
 
             numpins = comp_obj.numpins
 
@@ -159,6 +166,7 @@ class EdbNets(object):
 
         return dcconnected_net_list
 
+    @aedt_exception_handler
     def get_powertree(self, power_net_name, ground_nets):
         """Retrieve the power tree.
 
@@ -185,27 +193,27 @@ class EdbNets(object):
             net_group.append(power_net_name)
 
         component_list = []
-        rats = self.parent.core_components.get_rats()
+        rats = self._pedb.core_components.get_rats()
         for net in net_group:
             for el in rats:
-                if net in el['net_name']:
+                if net in el["net_name"]:
                     i = 0
-                    for n in el['net_name']:
+                    for n in el["net_name"]:
                         if n == net:
-                            df = [el['refdes'][i], el['pin_name'][i],net ]
+                            df = [el["refdes"][i], el["pin_name"][i], net]
                             component_list.append(df)
                         i += 1
 
         component_type = []
         for el in component_list:
             refdes = el[0]
-            comp_type = self.parent.core_components._cmp[refdes].type
+            comp_type = self._pedb.core_components._cmp[refdes].type
             component_type.append(comp_type)
             el.append(comp_type)
 
-            comp_partname = self.parent.core_components._cmp[refdes].partname
+            comp_partname = self._pedb.core_components._cmp[refdes].partname
             el.append(comp_partname)
-            pins = self.parent.core_components.get_pin_from_component(cmpName=refdes, netName=el[2])
+            pins = self._pedb.core_components.get_pin_from_component(cmpName=refdes, netName=el[2])
             el.append("-".join([i.GetName() for i in pins]))
 
         component_list_columns = ["refdes", "pin_name", "net_name", "component_type", "component_partname", "pin_list"]
@@ -237,23 +245,23 @@ class EdbNets(object):
 
         >>> deleted_nets = edb_core.core_nets.delete_nets(["Net1","Net2"])
         """
-        if type(netlist) is str:
-            netlist=[netlist]
-        nets_deleted =[]
+        if isinstance(netlist, str):
+            netlist = [netlist]
+        nets_deleted = []
         for net in netlist:
             try:
                 edb_net = self._edb.Cell.Net.FindByName(self._active_layout, net)
                 if edb_net is not None:
                     edb_net.Delete()
                     nets_deleted.append(net)
-                    self._messenger.add_info_message("Net {} Deleted".format(net))
+                    self._logger.info("Net %s Deleted", net)
             except:
                 pass
 
         return nets_deleted
 
     @aedt_exception_handler
-    def find_or_create_net(self, net_name=''):
+    def find_or_create_net(self, net_name=""):
         """Find or create the net with the given name in the layout.
 
         Parameters
@@ -266,10 +274,13 @@ class EdbNets(object):
         object
             Net Object
         """
-
-        net = self._edb.Cell.Net.FindByName(self._active_layout, net_name)
-        if net.IsNull():
+        if not net_name:
+            net_name = generate_unique_name("NET_")
             net = self._edb.Cell.Net.Create(self._active_layout, net_name)
+        else:
+            net = self._edb.Cell.Net.FindByName(self._active_layout, net_name)
+            if net.IsNull():
+                net = self._edb.Cell.Net.Create(self._active_layout, net_name)
         return net
 
     @aedt_exception_handler
@@ -289,9 +300,9 @@ class EdbNets(object):
             ``True`` if the net is found in component pins.
 
         """
-        if component_name not in self.parent.core_components.components:
+        if component_name not in self._pedb.core_components.components:
             return False
-        for net in self.parent.core_components.components[component_name].nets:
-            if net_name == net.GetName():
+        for net in self._pedb.core_components.components[component_name].nets:
+            if net_name == net:
                 return True
         return False

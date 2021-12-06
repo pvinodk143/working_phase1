@@ -1,4 +1,5 @@
 import os
+import csv
 import string
 import random
 import time
@@ -10,24 +11,40 @@ from functools import wraps
 from collections import OrderedDict
 import inspect
 import itertools
-logger = logging.getLogger(__name__)
-import pkgutil
-modules = [tup[1] for tup in pkgutil.iter_modules()]
-if 'clr' in modules:
-    import clr
+
+try:
+    logger = logging.getLogger('Global')
+except:
+    logger = logging.getLogger(__name__)
+is_ironpython = "IronPython" in sys.version or ".NETFramework" in sys.version
+_pythonver = sys.version_info[0]
+inside_desktop = True
+import sys
+
+try:
+    import ScriptEnv
+
+    ScriptEnv.Initialize("Ansoft.ElectronicsDesktop")
+except:
+    inside_desktop = False
+
+is_remote_server = os.getenv("PYAEDT_IRONPYTHON_SERVER", "False").lower() in ("true", "1", "t")
 
 class MethodNotSupportedError(Exception):
     """ """
+
     pass
 
-def _write_mes(mes_text, print_on_desktop=False):
-    if os.getenv('PYAEDT_SCREEN_LOGS', 'True').lower() in ('true', '1', 't'):
-        print(mes_text)
-    if logger and os.getenv('PYAEDT_FILE_LOGS', 'True').lower() in ('true', '1', 't'):
-        logger.error(str(mes_text))
-    if print_on_desktop and os.getenv('PYAEDT_DESKTOP_LOGS', 'True').lower() in ('true', '1', 't') and "oDesktop" in dir(
-            sys.modules["__main__"]):
-        sys.modules["__main__"].oDesktop.AddMessage("", "", 2, (str(mes_text)))
+
+def _write_mes(mes_text):
+    mes_text = str(mes_text)
+    parts = [mes_text[i:i + 250] for i in range(0, len(mes_text), 250)]
+    if logger:
+        for el in parts:
+            logger.error(el)
+    elif os.getenv("PYAEDT_SCREEN_LOGS", "True").lower() in ("true", "1", "t"):
+        for el in parts:
+            print(el)
 
 
 def _exception(ex_info, func, args, kwargs, message="Type Error"):
@@ -50,51 +67,128 @@ def _exception(ex_info, func, args, kwargs, message="Type Error"):
     -------
 
     """
-    if  os.getenv('PYAEDT_SCREEN_LOGS','True').lower() in ('true', '1', 't'):
-        _write_mes("**************************************************************")
-        _write_mes("pyaedt Error on Method {}:  {}. Please Check again".format(
-            func.__name__, message), True)
-        _write_mes("Arguments Provided: ")
-
+    message_to_print = ""
+    if "oDesktop" in dir(sys.modules['__main__']):
         try:
-
-            if int(sys.version[0]) > 2:
-                args_name = list(OrderedDict.fromkeys(
-                    inspect.getfullargspec(func)[0] + list(kwargs.keys())))
-                args_dict = OrderedDict(list(itertools.zip_longest(
-                    args_name, args)) + list(kwargs.items()))
-            else:
-                args_name = list(OrderedDict.fromkeys(
-                    inspect.getargspec(func)[0] + list(kwargs.keys())))
-                args_dict = OrderedDict(
-                    list(itertools.izip(args_name, args)) + list(kwargs.iteritems()))
-
-            for el in args_dict:
-                if el != "self":
-                    _write_mes("    {} = {} ".format(el, args_dict[el]))
+            messages = list(sys.modules['__main__'].oDesktop.GetMessages("", "", 2))
         except:
-            if len(args) > 1:
-                _write_mes(args[1:], kwargs)
-            else:
-                _write_mes(kwargs)
-    ex_value = ex_info[1]
+            messages = []
+        if messages and '[error] Script macro error' in messages[-1]:
+            message_to_print = messages[-1]
+    _write_mes("Method {} Failed:  {}. Please Check again".format(func.__name__, message))
+    _write_mes(ex_info[1])
+    if message_to_print:
+        _write_mes(message_to_print)
+    _write_mes("Arguments Provided: ")
+    try:
+        if int(sys.version[0]) > 2:
+            args_name = list(OrderedDict.fromkeys(inspect.getfullargspec(func)[0] + list(kwargs.keys())))
+            args_dict = OrderedDict(list(itertools.zip_longest(args_name, args)) + list(kwargs.items()))
+        else:
+            args_name = list(OrderedDict.fromkeys(inspect.getargspec(func)[0] + list(kwargs.keys())))
+            args_dict = OrderedDict(list(itertools.izip(args_name, args)) + list(kwargs.iteritems()))
+
+        for el in args_dict:
+            if el != "self":
+                _write_mes("    {} = {} ".format(el, args_dict[el]))
+    except:
+        pass
     tb_data = ex_info[2]
     tb_trace = traceback.format_tb(tb_data)
     if len(tb_trace) > 1:
-        tblist = tb_trace[1].split('\n')
+        tblist = tb_trace[1].split("\n")
     else:
-        tblist = tb_trace[0].split('\n')
-    _write_mes(str(ex_value), True)
+        tblist = tb_trace[0].split("\n")
     for el in tblist:
-        # self._main.oDesktop.AddMessage(proj_name, des_name, 2, el)
-        if "inner_function" not in el and "**kwargs" not in el:
-            _write_mes(el, True)
-    _write_mes("")
-    _write_mes("")
-    _write_mes("Method Docstring: ")
-    _write_mes("")
-    _write_mes(func.__doc__)
-    _write_mes("************************************************************")
+        if func.__name__ in el:
+            _write_mes("Error in : "+el)
+    _write_mes("Check Online documentation on: https://aedtdocs.pyansys.com/search.html?q={}".format(func.__name__))
+
+def _check_types(arg):
+    if "netref.builtins.list" in str(type(arg)):
+        return "list"
+    elif "netref.builtins.dict" in str(type(arg)):
+        return "dict"
+    elif "netref.__builtin__.list" in str(type(arg)):
+        return "list"
+    elif "netref.__builtin__.dict" in str(type(arg)):
+        return "dict"
+    return ""
+
+
+def convert_remote_object(arg):
+    """Convert Remote list or dict to native list and dictionary.
+
+    .. note::
+        This is needed only on Cpython to Ironpython Connection.
+
+    Parameters
+    ----------
+    arg : dict or list
+        Object to convert
+    Returns
+    -------
+    dict or list
+    """
+    if _check_types(arg) == "list":
+        return list(eval(str(arg)))
+    elif _check_types(arg) == "dict":
+        return dict(eval(str(arg)))
+    return arg
+
+
+def _remote_list_conversion(args):
+    if not is_remote_server:
+        return args
+    new_args = []
+    if args:
+        for arg in args:
+            new_args.append(convert_remote_object(arg))
+    return new_args
+
+
+def _remote_dict_conversion(args):
+    if not is_remote_server:
+        return args
+
+    if args:
+        new_kwargs = {}
+        for arg in args:
+            new_kwargs[arg] = convert_remote_object(args[arg])
+    else:
+        new_kwargs = args
+    return new_kwargs
+
+def _log_method(func, new_args, new_kwargs):
+    if str(func.__name__)[0] != "_":
+        line_begin = "    Implicit Arguments: "
+        line_begin2 = "    Explicit Arguments: "
+        message = []
+        if new_args:
+            object_name = str([new_args[0]])[1:-1]
+            id = object_name.find(" object at ")
+            if id >= 0:
+                object_name = object_name[1:id]
+                message.append(" '{}' has been exectuted.".format(
+                    object_name + "." + str(func.__name__)))
+                if new_args[1:]:
+                    message.append(line_begin + str(new_args[1:])[1:-1])
+                if new_kwargs:
+                    message.append(line_begin2 + str(new_kwargs)[1:-1])
+
+            else:
+                message.append(" '{}' has been exectuted.".format(str(func.__name__)))
+                if new_args[1:]:
+                    message.append(line_begin + str(new_args[1:])[1:-1])
+                if new_kwargs:
+                    message.append(line_begin2 + str(new_kwargs)[1:-1])
+
+        else:
+            message.append(" '{}' has been exectuted".format(str(func.__name__)))
+            if new_kwargs:
+                message.append(line_begin2 + str(new_kwargs)[1:-1])
+        for m in message:
+            logger.debug(m)
 
 
 def aedt_exception_handler(func):
@@ -111,14 +205,16 @@ def aedt_exception_handler(func):
         function return if correctly executed otherwise it will return False and errors will be plotted
 
     """
+
     @wraps(func)
     def inner_function(*args, **kwargs):
-        if "PYTEST_CURRENT_TEST" in os.environ or "UNITTEST_CURRENT_TEST" in os.environ:
-            # We are running under pytest or unittest, do not use the decorator
-            return func(*args, **kwargs)
-        else:
+        if os.getenv("PYAEDT_ERROR_HANDLER", "True").lower() in ("true", "1", "t"):
             try:
-                return func(*args, **kwargs)
+                new_args = _remote_list_conversion(args)
+                new_kwargs = _remote_dict_conversion(kwargs)
+                out = func(*new_args, **new_kwargs)
+                _log_method(func, new_args, new_kwargs)
+                return out
             except TypeError:
                 _exception(sys.exc_info(), func, args, kwargs, "Type Error")
                 return False
@@ -145,77 +241,86 @@ def aedt_exception_handler(func):
                 return False
             except MethodNotSupportedError:
                 message = "This Method is not supported in current AEDT Design Type."
-                if os.getenv('PYAEDT_SCREEN_LOGS', 'True').lower() in ('true', '1', 't'):
+                if os.getenv("PYAEDT_SCREEN_LOGS", "True").lower() in ("true", "1", "t"):
                     print("**************************************************************")
-                    print("pyaedt Error on Method {}:  {}. Please Check again".format(
-                        func.__name__, message))
+                    print("pyaedt error on Method {}:  {}. Please Check again".format(func.__name__, message))
                     print("**************************************************************")
                     print("")
-                if os.getenv('PYAEDT_FILE_LOGS', 'True').lower() in ('true', '1', 't'):
+                if os.getenv("PYAEDT_FILE_LOGS", "True").lower() in ("true", "1", "t"):
                     logger.error(message)
                 return False
             except BaseException:
                 _exception(sys.exc_info(), func, args, kwargs, "General or AEDT Error")
+
                 return False
+        else:
+            return func(*args, **kwargs)
+
     return inner_function
+
+@aedt_exception_handler
+def get_version_and_release(input_version):
+    version = int(input_version[2:4])
+    release = int(input_version[5])
+    if version < 20:
+        if release < 3:
+            version -= 1
+        else:
+            release -= 2
+    return (version, release)
 
 
 @aedt_exception_handler
 def env_path(input_version):
-    """
+    """Return the version Environment Variable name based on an input version string.
 
     Parameters
     ----------
-    input_version :
-
+    input_version : str
 
     Returns
     -------
+    str
 
+    Examples
+    --------
+    >>> env_path_student("2021.2")
+    "C:/Program Files/ANSYSEM/ANSYSEM2021.2/Win64"
     """
-    version = int(input_version[2:4])
-    release = int(input_version[5])
-    if version < 20:
-        if release < 3:
-            version -= 1
-        else:
-            release -= 2
-    v_key = "ANSYSEM_ROOT{0}{1}".format(version, release)
-    return os.getenv(v_key)
+    return os.getenv("ANSYSEM_ROOT{0}{1}".format(
+        get_version_and_release(input_version)[0],
+        get_version_and_release(input_version)[1]), "")
 
 
 @aedt_exception_handler
 def env_value(input_version):
-    """
+    """Return the version Environment Variable value based on an input version string.
 
     Parameters
     ----------
-    input_version :
-
+    input_version : str
 
     Returns
     -------
+    str
 
+    Examples
+    --------
+    >>> env_value("2021.2")
+    "ANSYSEM_ROOT211"
     """
-    version = int(input_version[2:4])
-    release = int(input_version[5])
-    if version < 20:
-        if release < 3:
-            version -= 1
-        else:
-            release -= 2
-    v_key = "ANSYSEM_ROOT{0}{1}".format(version, release)
-    return v_key
+    return "ANSYSEM_ROOT{0}{1}".format(
+        get_version_and_release(input_version)[0],
+        get_version_and_release(input_version)[1])
 
 
 @aedt_exception_handler
 def env_path_student(input_version):
-    """Return the Student version Environment Variable value based on an input version string
+    """Return the Student version Environment Variable value based on an input version string.
 
     Parameters
     ----------
     input_version : str
-
 
     Returns
     -------
@@ -223,28 +328,21 @@ def env_path_student(input_version):
 
     Examples
     --------
-    >>> env_path_student("2021.1")
-    "C:/Program Files/ANSYSEM/ANSYSEM2021.1/Win64"
+    >>> env_path_student("2021.2")
+    "C:/Program Files/ANSYSEM/ANSYSEM2021.2/Win64"
     """
-    version = int(input_version[2:4])
-    release = int(input_version[5])
-    if version < 20:
-        if release < 3:
-            version -= 1
-        else:
-            release -= 2
-    v_key = "ANSYSEMSV_ROOT{0}{1}".format(version, release)
-    return os.getenv(v_key)
+    return os.getenv("ANSYSEMSV_ROOT{0}{1}".format(
+        get_version_and_release(input_version)[0],
+        get_version_and_release(input_version)[1]), "")
 
 
 @aedt_exception_handler
 def env_value_student(input_version):
-    """Return the Student version Environment Variable name based on an input version string
+    """Return the Student version Environment Variable name based on an input version string.
 
     Parameters
     ----------
     input_version : str
-
 
     Returns
     -------
@@ -252,23 +350,17 @@ def env_value_student(input_version):
 
     Examples
     --------
-    >>> env_value_student("2021.1")
+    >>> env_value_student("2021.2")
     "ANSYSEMSV_ROOT211"
     """
-    version = int(input_version[2:4])
-    release = int(input_version[5])
-    if version < 20:
-        if release < 3:
-            version -= 1
-        else:
-            release -= 2
-    v_key = "ANSYSEMSV_ROOT{0}{1}".format(version, release)
-    return v_key
+    return "ANSYSEMSV_ROOT{0}{1}".format(
+        get_version_and_release(input_version)[0],
+        get_version_and_release(input_version)[1])
 
 
 @aedt_exception_handler
 def get_filename_without_extension(path):
-    """
+    """Get the filename without its extension.
 
     Parameters
     ----------
@@ -277,14 +369,15 @@ def get_filename_without_extension(path):
 
     Returns
     -------
+    str
 
     """
     return os.path.splitext(os.path.split(path)[1])[0]
 
 
 @aedt_exception_handler
-def generate_unique_name(rootname, suffix='', n=6):
-    """Generate a new Random name given a rootname and, optionally a suffix
+def generate_unique_name(rootname, suffix="", n=6):
+    """Generate a new  name given a rootname and optionally a suffix.
 
     Parameters
     ----------
@@ -293,21 +386,21 @@ def generate_unique_name(rootname, suffix='', n=6):
     suffix :
         Suffix to be added (Default value = '')
     n :
-        Number of random characters in the name, defaults to 6
+        Number of random characters in the name. The default value is 6.
 
     Returns
     -------
 
     """
     char_set = string.ascii_uppercase + string.digits
-    uName = ''.join(random.choice(char_set) for _ in range(n))
+    uName = "".join(random.choice(char_set) for _ in range(n))
     unique_name = rootname + "_" + uName
     if suffix:
         unique_name += "_" + suffix
     return unique_name
 
 
-def retry_ntimes(n, function, *args, **kwargs):
+def _retry_ntimes(n, function, *args, **kwargs):
     """
 
     Parameters
@@ -334,22 +427,30 @@ def retry_ntimes(n, function, *args, **kwargs):
                 ret_val = True
         except:
             retry += 1
-            time.sleep(0.05)
+            time.sleep(0.1)
         else:
             break
+    if retry == n:
+        if "__name__" in dir(function):
+            raise AttributeError("Error in Executing Method {}.".format(function.__name__))
+        else:
+            raise AttributeError("Error in Executing Method.")
+
     return ret_val
 
-def time_fn( fn, *args, **kwargs ):
+
+def time_fn(fn, *args, **kwargs):
     start = datetime.datetime.now()
-    results = fn( *args, **kwargs )
+    results = fn(*args, **kwargs)
     end = datetime.datetime.now()
     fn_name = fn.__module__ + "." + fn.__name__
     delta = (end - start).microseconds * 1e-6
     print(fn_name + ": " + str(delta) + "s")
     return results
 
+
 def isclose(a, b, rel_tol=1e-9, abs_tol=0.0):
-    return abs(a-b) <= max( rel_tol * max(abs(a), abs(b)), abs_tol )
+    return abs(a - b) <= max(rel_tol * max(abs(a), abs(b)), abs_tol)
 
 
 def is_number(a):
@@ -363,4 +464,51 @@ def is_number(a):
             return False
     else:
         return False
-    #return str(a).replace(".", "").replace("+", "").replace("-", "").replace("e","").replace("E","").isnumeric()
+    # return str(a).replace(".", "").replace("+", "").replace("-", "").replace("e","").replace("E","").isnumeric()
+
+
+def is_project_locked(project_path):
+    """Checks if an aedt project lock file exists.
+
+    Parameters
+    ----------
+    project_path : str
+        Aedt project path.
+
+    Returns
+    -------
+    bool
+    """
+    return os.path.exists(project_path[:-4]+"lock")
+
+@aedt_exception_handler
+def remove_project_lock(project_path):
+    """Checks if an aedt project exists and try to remove the lock file.
+
+    .. note::
+       This operation is risky because the file could be opened in another Desktop instance.
+
+    Parameters
+    ----------
+    project_path : str
+        Aedt project path.
+
+    Returns
+    -------
+    bool
+    """
+    if os.path.exists(project_path + ".lock"):
+        os.remove(project_path + ".lock")
+    return True
+
+@aedt_exception_handler
+def write_csv(output, list_data, delimiter=",", quotechar="|", quoting=csv.QUOTE_MINIMAL):
+    if is_ironpython:
+        f = open(output, 'wb')
+    else:
+        f = open(output, 'w', newline='')
+    writer = csv.writer(f, delimiter=delimiter, quotechar=quotechar, quoting=quoting)
+    for data in list_data:
+        writer.writerow(data)
+    f.close()
+    return True

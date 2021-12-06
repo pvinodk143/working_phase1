@@ -37,21 +37,19 @@ To post issues, questions, and code, go to `PyAEDT Issues
 <https://github.com/pyansys/PyAEDT/issues>`_.
 
 
-Project Transition - Legacy Support
------------------------------------
-This project was formerly known as AEDTLib.
-Thanks to all early adopters, contributors, and users who submitted issues,
-gave feedback, and contributed code through the years.
-
-With PyAEDT, Ansys is leveraging its ability to create new Pythonic,
-cross-platform, and multi-language service-based interfaces for Ansys products.
-Your contributions to PyAEDT will help shape PyAEDT into a better solution.
-
-
 Dependencies
 ------------
 To run PyAEDT, you must have a local licenced copy of AEDT.
-PyAEDT supports AEDT versions prior to and including 2021 R1.
+PyAEDT supports AEDT versions prior to and including 2021 R2.
+
+Student Version
+---------------
+
+PyAEDT now supports supports also AEDT Student version 2021 R2. Visit
+`Student Version page <https://www.ansys.com/academic/students/ansys-e
+lectronics-desktop-student>`_
+for more info.
+
 
 Why PyAEDT?
 -----------
@@ -99,7 +97,9 @@ Explicit Desktop Declaration and Error Management
     Launch AEDT 2021 R1 in Non-Graphical mode
 
     from pyaedt import Desktop, Circuit
-    with Desktop("2021.1", NG=True):
+    with Desktop(specified_version="2021.1",
+                 non_graphical=False, new_desktop_session=True,
+                 close_on_exit=True, student_version=False):
         circuit = Circuit()
         ...
         # Any error here will be caught by Desktop.
@@ -116,13 +116,36 @@ Implicit Desktop Declaration and Error Management
     Launch the latest installed version of AEDT in graphical mode
 
     from pyaedt import Circuit    
-    with Circuit() as circuit:
+    with Circuit(specified_version="2021.2",
+                 non_graphical=False) as circuit:
         ...
         # Any error here will be caught by Desktop.
         ...
 
     # Desktop is automatically released here.
 
+
+Remote Application Call
+~~~~~~~~~~~~~~~~~~~~~~~
+
+On a CPython Server
+
+.. code:: python
+
+    Launch Pyaedt remote server on CPython
+
+    from pyaedt.common_rpc import launch_server
+    launch_server()
+
+
+On any windows client machine
+
+.. code:: python
+
+    from pyaedt.common_rpc import client
+    cl1 = client("server_name")
+    hfss = cl1.root.hfss()
+    # your code here
 
 Variables
 ~~~~~~~~~

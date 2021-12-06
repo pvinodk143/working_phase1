@@ -1,22 +1,34 @@
-from ..generic.general_methods import aedt_exception_handler, is_number
-from .Primitives import Primitives
-import numbers
+from pyaedt.generic.general_methods import aedt_exception_handler, is_number
+from pyaedt.modeler.Primitives import Primitives
 
 
 class Primitives2D(Primitives, object):
-    """Manages primitives in 2D tools."""
+    """Manages primitives in 2D tools.
+
+    This class is inherited in the caller application and is accessible through the primitives variable part
+    of the modeler object (for example, ``hfss.modeler.primitives`` or ``icepak.modeler.primitives``).
+
+
+    Examples
+    --------
+    Basic usage demonstrated with a Q2D or Maxwell 2D design:
+
+    >>> from pyaedt import Q2d
+    >>> aedtapp = Q2d()
+    >>> prim = aedtapp.modeler.primitives
+    """
 
     @property
     def plane2d(self):
         """Create a 2D plane."""
         plane = "Z"
-        if self._parent.design_type == "Maxwell 2D":
-            if self._parent.odesign.GetGeometryMode()=="about Z":
+        if self._app.design_type == "Maxwell 2D":
+            if self._app._odesign.GetGeometryMode() == "about Z":
                 plane = "Y"
         return plane
 
-    def __init__(self, parent, modeler):
-        Primitives.__init__(self, parent, modeler)
+    def __init__(self, modeler):
+        Primitives.__init__(self, modeler)
 
     @aedt_exception_handler
     def create_circle(self, position, radius, num_sides=0, is_covered=True, name=None, matname=None):
@@ -44,6 +56,11 @@ class Primitives2D(Primitives, object):
         pyaedt.modeler.Object3d.Object3d
             Object3d
 
+        References
+        ----------
+
+        >>> oEditor.CreateCircle
+
         Examples
         --------
         >>> circle1 = aedtapp.modeler.primitives.create_circle([0, -2, -2], 3)
@@ -63,14 +80,14 @@ class Primitives2D(Primitives, object):
         vArg1.append("ZCenter:="), vArg1.append(ZCenter)
         vArg1.append("Radius:="), vArg1.append(Radius)
         vArg1.append("WhichAxis:="), vArg1.append(szAxis)
-        vArg1.append("NumSegments:="), vArg1.append('{}'.format(num_sides))
+        vArg1.append("NumSegments:="), vArg1.append("{}".format(num_sides))
 
         vArg2 = self._default_object_attributes(name=name, matname=matname)
-        new_object_name = self.oeditor.CreateCircle(vArg1, vArg2)
+        new_object_name = self._oeditor.CreateCircle(vArg1, vArg2)
         return self._create_object(new_object_name)
 
     @aedt_exception_handler
-    def create_ellipse(self,position, major_radius, ratio, is_covered=True, name=None, matname=None):
+    def create_ellipse(self, position, major_radius, ratio, is_covered=True, name=None, matname=None):
         """Create an ellipse.
 
         Parameters
@@ -95,6 +112,11 @@ class Primitives2D(Primitives, object):
         pyaedt.modeler.Object3d.Object3d
             Object3d
 
+        References
+        ----------
+
+        >>> oEditor.CreateEllipse
+
         Examples
         --------
         >>> ellipse1 = aedtapp.modeler.primitives.create_ellipse([0, -2, -2], 4.0, 0.2)
@@ -114,7 +136,7 @@ class Primitives2D(Primitives, object):
         vArg1.append("WhichAxis:="), vArg1.append(szAxis)
 
         vArg2 = self._default_object_attributes(name=name, matname=matname)
-        new_object_name = self.oeditor.CreateEllipse(vArg1, vArg2)
+        new_object_name = self._oeditor.CreateEllipse(vArg1, vArg2)
         return self._create_object(new_object_name)
 
     @aedt_exception_handler
@@ -126,7 +148,7 @@ class Primitives2D(Primitives, object):
         position : list of float
             Position of the lower-left corner of the rectangle
         dimension_list : list of float
-            List of [height, width] of the rectangle
+            List of rectangle sizes: [X size, Y size] for XY planes or [Z size, R size] for RZ planes
         is_covered : bool
             Specify whether the ellipse is a sheet (covered) or a line object
         name : str, default=None
@@ -140,31 +162,35 @@ class Primitives2D(Primitives, object):
         -------
         pyaedt.modeler.Object3d.Object3d
 
+        References
+        ----------
+
+        >>> oEditor.CreateRectangle
+
+        Examples
+        --------
+
         >>> rect1 = aedtapp.modeler.primitives.create_rectangle([0, -2, -2], [3, 4])
         >>> rect2 = aedtapp.modeler.primitives.create_rectangle(position=[0, -2, -2], dimension_list=[3, 4],
         ...                                                     name="MyCircle", matname="Copper")
 
         """
-        szAxis = self.plane2d
-        XStart, YStart, ZStart = self._pos_with_arg(position)
-        if self.plane2d == "Z":
-            Height  = self._arg_with_dim(dimension_list[0])
-            Width = self._arg_with_dim(dimension_list[1])
-        else:
-            Width = self._arg_with_dim(dimension_list[0])
-            Height = self._arg_with_dim(dimension_list[1])
+        axis = self.plane2d
+        x_start, y_start, z_start = self._pos_with_arg(position)
+        width = self._arg_with_dim(dimension_list[0])
+        height = self._arg_with_dim(dimension_list[1])
 
         vArg1 = ["NAME:RectangleParameters"]
         vArg1.append("IsCovered:="), vArg1.append(is_covered)
-        vArg1.append("XStart:="), vArg1.append(XStart)
-        vArg1.append("YStart:="), vArg1.append(YStart)
-        vArg1.append("ZStart:="), vArg1.append(ZStart)
-        vArg1.append("Width:="), vArg1.append(Width)
-        vArg1.append("Height:="), vArg1.append(Height)
-        vArg1.append("WhichAxis:="), vArg1.append(szAxis)
+        vArg1.append("XStart:="), vArg1.append(x_start)
+        vArg1.append("YStart:="), vArg1.append(y_start)
+        vArg1.append("ZStart:="), vArg1.append(z_start)
+        vArg1.append("Width:="), vArg1.append(width)
+        vArg1.append("Height:="), vArg1.append(height)
+        vArg1.append("WhichAxis:="), vArg1.append(axis)
 
         vArg2 = self._default_object_attributes(name=name, matname=matname)
-        new_object_name = self.oeditor.CreateRectangle(vArg1, vArg2)
+        new_object_name = self._oeditor.CreateRectangle(vArg1, vArg2)
         return self._create_object(new_object_name)
 
     @aedt_exception_handler
@@ -192,6 +218,14 @@ class Primitives2D(Primitives, object):
         -------
         pyaedt.modeler.Object3d.Object3d
 
+        References
+        ----------
+
+        >>> oEditor.CreateRegularPolygon
+
+        Examples
+        --------
+
         >>> pg1 = aedtapp.modeler.primitives.create_regular_polygon([0, 0, 0], [0, 2, 0])
         >>> pg2 = aedtapp.modeler.primitives.create_regular_polygon(position=[0, 0, 0], start_point=[0, 2, 0],
         ...                                                     name="MyPolygon", matname="Copper")
@@ -215,7 +249,7 @@ class Primitives2D(Primitives, object):
         vArg1.append("WhichAxis:="), vArg1.append(self.plane2d)
 
         vArg2 = self._default_object_attributes(name=name, matname=matname)
-        new_object_name = self.oeditor.CreateRegularPolygon(vArg1, vArg2)
+        new_object_name = self._oeditor.CreateRegularPolygon(vArg1, vArg2)
         return self._create_object(new_object_name)
 
     @aedt_exception_handler
@@ -232,8 +266,13 @@ class Primitives2D(Primitives, object):
         -------
         pyaedt.modeler.Object3d.Object3d
 
+        References
+        ----------
+
+        >>> oEditor.CreateRegion
+
         """
-        #TODO handle RZ!!
+        # TODO handle RZ!!
         if is_number(pad_percent):
             pad_percent = [pad_percent, pad_percent, 0, pad_percent, pad_percent, 0]
         else:

@@ -1,4 +1,3 @@
-
 def get_hpc_info(filename):
     """Retrieve HPC information.
 
@@ -15,19 +14,18 @@ def get_hpc_info(filename):
         Design name.
 
     """
-    config_name = ''
-    design_type = ''
-    with open(filename, 'r') as fid:
+    config_name = ""
+    design_type = ""
+    with open(filename, "r") as fid:
         for line in fid:
-            if 'ConfigName=' in line:
-                config_name = line.strip().replace('ConfigName=', '').replace("'", '')
-            elif 'DesignType=' in line:
-                design_type = line.strip().replace('DesignType=', '').replace("'", '')
+            if "ConfigName=" in line:
+                config_name = line.strip().replace("ConfigName=", "").replace("'", "")
+            elif "DesignType=" in line:
+                design_type = line.strip().replace("DesignType=", "").replace("'", "")
     return config_name, design_type
 
 
-def update_hpc_option(self, filnename, propertyname, propertyvalue,
-                      isvaluestring=True):
+def update_hpc_option(filnename, propertyname, propertyvalue, isvaluestring=True):
     """Update an HPC option in the configuration file.
 
     Parameters
@@ -53,7 +51,7 @@ def update_hpc_option(self, filnename, propertyname, propertyvalue,
                 new_line = line
     with open(filnename) as fid:
         if isvaluestring:
-            new_line = fid.read().replace(old_prop, propertyname + "=" + "\'" + str(propertyvalue) + "\'")
+            new_line = fid.read().replace(old_prop, propertyname + "=" + "'" + str(propertyvalue) + "'")
         else:
             new_line = fid.read().replace(old_prop, propertyname + "=" + str(propertyvalue))
 
@@ -61,7 +59,7 @@ def update_hpc_option(self, filnename, propertyname, propertyvalue,
         f.write(new_line)
 
 
-def update_simulation_cores(self, name, nc):
+def update_simulation_cores(name, nc):
     """Update the HPC number of cores in the configuration file.
 
     Parameters
@@ -74,7 +72,7 @@ def update_simulation_cores(self, name, nc):
     """
     with open(name) as fid:
         for line in fid:
-            if 'NumCores=' in line:
+            if "NumCores=" in line:
                 old_cores = line.strip()
                 new_line = line
     with open(name) as fid:
@@ -83,7 +81,7 @@ def update_simulation_cores(self, name, nc):
         f.write(new_line)
 
 
-def update_simulation_engines(self, name, nc):
+def update_simulation_engines(name, nc):
     """Update the HPC number of simulaton engines in the configuration file.
 
     Parameters
@@ -96,7 +94,7 @@ def update_simulation_engines(self, name, nc):
     """
     with open(name) as fid:
         for line in fid:
-            if 'NumEngines=' in line:
+            if "NumEngines=" in line:
                 old_cores = line.strip()
                 new_line = line
     with open(name) as fid:
@@ -105,46 +103,42 @@ def update_simulation_engines(self, name, nc):
         f.write(new_line)
 
 
-def update_machine_name(self, name, machinename):
+def update_machine_name(name, machinename):
     """Update the machine name.
 
     Parameters
     ----------
     name : str
-        Name of the machine to update.
+        Path of the configuration file.
     machinename : str
         New name of the machine.
 
     """
     with open(name) as fid:
         for line in fid:
-            if 'MachineName=' in line:
+            if "MachineName=" in line:
                 old_machine = line.strip()
                 new_line = line
     with open(name) as fid:
-        new_line = fid.read().replace(old_machine, "MachineName=\'" + str(machinename) + "\'")
+        new_line = fid.read().replace(old_machine, "MachineName='" + str(machinename) + "'")
     with open(name, "w") as f:
         f.write(new_line)
 
 
-def update_config_name(self, name, machinename):
-    """Update the name of the machine.
+def update_config_name(name, machinename):
+    """Update the name of the configuration.
 
     Parameters
     ----------
     name : str
-        Name of the machine to update.
+        Path of the configuration file.
     machinename : str
         New name of the machine.
-
-    Returns
-    -------
-    type
 
     """
     with open(name) as fid:
         for line in fid:
-            if 'ConfigName=' in line:
+            if "ConfigName=" in line:
                 old_config = line.strip()
                 new_line = line
     with open(name) as fid:
@@ -155,7 +149,7 @@ def update_config_name(self, name, machinename):
         f.write(new_line)
 
 
-def update_cluster_cores(self, file_name, param_name, param_val):
+def update_cluster_cores(file_name, param_name, param_val):
     """Update the number of cluster cores in the configuration file.
 
     Parameters
@@ -174,12 +168,12 @@ def update_cluster_cores(self, file_name, param_name, param_val):
                 old_line = line
     with open(file_name) as f:
         replacement_line = "\\	\\	\\	NumCores=" + str(param_val) + "\\" + chr(10)
-        new_line = f.read().replace(old_line,  replacement_line)
+        new_line = f.read().replace(old_line, replacement_line)
     with open(file_name, "w") as f:
         f.write(new_line)
 
 
-def Update_hpc_template(self, file_name, param_name, param_val):
+def update_hpc_template(file_name, param_name, param_val):
     """Update a paramerter in the HPC template file.
 
     Parameters
@@ -194,11 +188,11 @@ def Update_hpc_template(self, file_name, param_name, param_val):
     """
     with open(file_name) as f:
         for line in f:
-            if (line.find(param_name) > 0):
+            if line.find(param_name) > 0:
                 line = f.readline()
                 old_line = line
     with open(file_name) as f:
         replacement_line = "\\	\\	\\	Value=\\'" + str(param_val) + "\\'\\" + chr(10)
-        new_line = f.read().replace(old_line,  replacement_line)
+        new_line = f.read().replace(old_line, replacement_line)
     with open(file_name, "w") as f:
         f.write(new_line)

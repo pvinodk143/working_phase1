@@ -1,10 +1,10 @@
-from ..generic.general_methods import aedt_exception_handler, generate_unique_name
-from .Analysis import Analysis
-from .Design import solutions_settings
-from ..modeler.Circuit import ModelerNexxim
-from ..modules.SetupTemplates import SetupKeys
-from ..modules.SolveSetup import SetupCircuit
-from ..modules.PostProcessor import CircuitPostProcessor
+from pyaedt.generic.general_methods import aedt_exception_handler
+from pyaedt.modeler.Circuit import ModelerNexxim
+from pyaedt.modules.PostProcessor import CircuitPostProcessor
+from pyaedt.modules.SolveSetup import SetupCircuit
+from pyaedt.application.Analysis import Analysis
+from pyaedt.application.Design import solutions_settings
+
 
 class FieldAnalysisCircuit(Analysis):
     """FieldCircuitAnalysis class.
@@ -20,13 +20,36 @@ class FieldAnalysisCircuit(Analysis):
 
     """
 
-    def __init__(self, application, projectname, designname, solution_type, setup_name=None,
-                 specified_version=None, NG=False, AlwaysNew=False, release_on_exit=False, student_version=False):
+    def __init__(
+        self,
+        application,
+        projectname,
+        designname,
+        solution_type,
+        setup_name=None,
+        specified_version=None,
+        non_graphical=False,
+        new_desktop_session=False,
+        close_on_exit=False,
+        student_version=False,
+    ):
         self.solution_type = solution_type
-        Analysis.__init__(self, application, projectname, designname, solution_type, setup_name,
-                          specified_version, NG, AlwaysNew, release_on_exit, student_version)
+        Analysis.__init__(
+            self,
+            application,
+            projectname,
+            designname,
+            solution_type,
+            setup_name,
+            specified_version,
+            non_graphical,
+            new_desktop_session,
+            close_on_exit,
+            student_version,
+        )
+
         self._modeler = ModelerNexxim(self)
-        self._modeler.primitives.init_padstacks()
+        self._modeler.layout.init_padstacks()
         self._post = CircuitPostProcessor(self)
 
     @property
@@ -35,7 +58,7 @@ class FieldAnalysisCircuit(Analysis):
 
         Returns
         -------
-        pyaedt.modules.PostProcessor.CircuitPostProcessor
+        :class:`pyaedt.modules.PostProcessor.CircuitPostProcessor`
             PostProcessor object.
         """
         return self._post
@@ -54,9 +77,13 @@ class FieldAnalysisCircuit(Analysis):
 
     @property
     def existing_analysis_setups(self):
-        """Analysis setups."""
-        oModule = self.odesign.GetModule("SimSetup")
-        setups = oModule.GetAllSolutionSetups()
+        """Analysis setups.
+
+        References
+        ----------
+
+        >>> oModule.GetAllSolutionSetups"""
+        setups = self.oanalysis.GetAllSolutionSetups()
         return setups
 
     @property
@@ -73,13 +100,13 @@ class FieldAnalysisCircuit(Analysis):
         return self._modeler
 
     @property
-    def oanalysis(self):
-        """Analysis object."""
-        return self.odesign.GetModule("SimSetup")
-
-    @property
     def setup_names(self):
-        """Setup names."""
+        """Setup names.
+
+        References
+        ----------
+
+        >>> oModule.GetAllSolutionSetups"""
         return self.oanalysis.GetAllSolutionSetups()
 
     @property
@@ -91,8 +118,12 @@ class FieldAnalysisCircuit(Analysis):
         type
             BoundarySetup Module object
 
+        References
+        ----------
+
+        >>> oEditor.GetAllPorts
         """
-        ports = [p.replace('IPort@', '').split(';')[0] for p in self.modeler.oeditor.GetAllPorts()]
+        ports = [p.replace("IPort@", "").split(";")[0] for p in self.modeler.oeditor.GetAllPorts()]
         return ports
 
     @property
@@ -101,17 +132,16 @@ class FieldAnalysisCircuit(Analysis):
 
         Parameters
         ----------
-        eexcitation_names : list, optional
+        excitation_names : list, optional
             List of excitations. The default is ``[]``, in which case
             the S parameters for all excitations are to be provided.
             For example, ``["1", "2"]``.
 
         Returns
         -------
-        list
+        list of str
             List of strings representing the S parameters of the excitations.
             For example, ``"S(1,1)", "S(1,2)", "S(2,2)"``.
-
 
         """
         if not excitation_names:
@@ -126,7 +156,7 @@ class FieldAnalysisCircuit(Analysis):
         return spar
 
     @aedt_exception_handler
-    def get_all_return_loss_list(self, excitation_names=[], excitation_name_prefix=''):
+    def get_all_return_loss_list(self, excitation_names=[], excitation_name_prefix=""):
         """Retrieve a list of all return losses for a list of exctitations.
 
         Parameters
@@ -140,23 +170,26 @@ class FieldAnalysisCircuit(Analysis):
 
         Returns
         -------
-        list
+        list of str
             List of strings representing the return losses of the excitations.
             For example ``["S(1, 1)", S(2, 2)]``
 
+        References
+        ----------
+
+        >>> oEditor.GetAllPorts
         """
         if not excitation_names:
             excitation_names = self.get_excitations_name
         if excitation_name_prefix:
-            excitation_names = [
-                i for i in excitation_names if excitation_name_prefix.lower() in i.lower()]
+            excitation_names = [i for i in excitation_names if excitation_name_prefix.lower() in i.lower()]
         spar = []
         for i in excitation_names:
             spar.append("S({},{})".format(i, i))
         return spar
 
     @aedt_exception_handler
-    def get_all_insertion_loss_list(self, trlist=[], reclist=[], tx_prefix='', rx_prefix=''):
+    def get_all_insertion_loss_list(self, trlist=[], reclist=[], tx_prefix="", rx_prefix=""):
         """Retrieve a list of all insertion losses from two lists of excitations (driver and receiver).
 
         Parameters
@@ -173,18 +206,22 @@ class FieldAnalysisCircuit(Analysis):
 
         Returns
         -------
-        list
+        list of str
             List of strings representing insertion losses of the excitations.
             For example, ``["S(1,2)"]``.
 
+        References
+        ----------
+
+        >>> oEditor.GetAllPorts
         """
         spar = []
         if not trlist:
             trlist = [i for i in self.get_excitations_name if tx_prefix in i]
         if not reclist:
             reclist = [i for i in self.get_excitations_name if rx_prefix in i]
-        if len(trlist)!= len(reclist):
-            self._messenger.add_error_message("TX and RX should be same length lists")
+        if len(trlist) != len(reclist):
+            self.logger.error("The TX and RX lists should be the same length.")
             return False
         for i, j in zip(trlist, reclist):
             spar.append("S({},{})".format(i, j))
@@ -204,23 +241,27 @@ class FieldAnalysisCircuit(Analysis):
 
         Returns
         -------
-        list
+        list of str
             List of strings representing near end XTalks of the excitations.
             For example, ``["S(1, 2)", "S(1, 3)", "S(2, 3)"]``.
 
+        References
+        ----------
+
+        >>> oEditor.GetAllPorts
         """
         next = []
         if not trlist:
             trlist = [i for i in self.get_excitations_name if tx_prefix in i]
         for i in trlist:
-            k = trlist.index(i)+1
+            k = trlist.index(i) + 1
             while k < len(trlist):
                 next.append("S({},{})".format(i, trlist[k]))
                 k += 1
         return next
 
     @aedt_exception_handler
-    def get_fext_xtalk_list(self, trlist=[], reclist=[], tx_prefix='', rx_prefix='', skip_same_index_couples=True):
+    def get_fext_xtalk_list(self, trlist=[], reclist=[], tx_prefix="", rx_prefix="", skip_same_index_couples=True):
         """Retrieve a list of all the far end XTalks from two lists of exctitations (driver and receiver).
 
         Parameters
@@ -243,10 +284,14 @@ class FieldAnalysisCircuit(Analysis):
 
         Returns
         -------
-        list
+        list of str
             List of strings representing the far end XTalks of the excitations.
             For example, ``["S(1, 4)", "S(2, 3)"]``.
 
+        References
+        ----------
+
+        >>> oEditor.GetAllPorts
         """
         fext = []
         if not trlist:
@@ -255,7 +300,7 @@ class FieldAnalysisCircuit(Analysis):
             reclist = [i for i in self.get_excitations_name if rx_prefix in i]
         for i in trlist:
             for k in reclist:
-                if not skip_same_index_couples or reclist.index(k)!= trlist.index(i):
+                if not skip_same_index_couples or reclist.index(k) != trlist.index(i):
                     fext.append("S({},{})".format(i, k))
         return fext
 
@@ -298,6 +343,15 @@ class FieldAnalysisCircuit(Analysis):
         SetupCircuit
             Setup object.
 
+        References
+        ----------
+
+        >>> oModule.AddLinearNetworkAnalysis
+        >>> oModule.AddDCAnalysis
+        >>> oModule.AddTransient
+        >>> oModule.AddQuickEyeAnalysis
+        >>> oModule.AddVerifEyeAnalysis
+        >>> oModule.AddAMIAnalysis
         """
         if setuptype is None:
             setuptype = self.solution_type

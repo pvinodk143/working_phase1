@@ -1,14 +1,14 @@
 """This module contains these classes: `Q2d`, `Q3d`, and `QExtractor`."""
 from __future__ import absolute_import
 
-from .application.Analysis2D import FieldAnalysis2D
-from .application.Analysis3D import FieldAnalysis3D
-from .desktop import exception_to_desktop
-from .generic.general_methods import aedt_exception_handler, generate_unique_name
+from pyaedt.application.Analysis2D import FieldAnalysis2D
+from pyaedt.application.Analysis3D import FieldAnalysis3D
+from pyaedt.generic.general_methods import aedt_exception_handler, generate_unique_name
 from collections import OrderedDict
-from .modules.Boundary import BoundaryObject
+from pyaedt.modules.Boundary import BoundaryObject
+from pyaedt.generic.DataHandlers import _dict2arg
 import os
-
+import warnings
 
 class QExtractor(FieldAnalysis3D, FieldAnalysis2D, object):
     """Extracts a 2D or 3D field analysis.
@@ -23,22 +23,6 @@ class QExtractor(FieldAnalysis3D, FieldAnalysis2D, object):
 
 
     """
-    @property
-    def odefinition_manager(self):
-        """Definition manager."""
-        return self.oproject.GetDefinitionManager()
-
-    @property
-    def omaterial_manager(self):
-        """Material manager."""
-        return self.odefinition_manager.GetManager("Material")
-
-    '''
-    @property
-    def oeditor(self):
-        ""Editor."""
-        return self.odesign.SetActiveEditor("3D Modeler")
-    '''
 
     @property
     def design_file(self):
@@ -46,23 +30,50 @@ class QExtractor(FieldAnalysis3D, FieldAnalysis2D, object):
         design_file = os.path.join(self.working_directory, "design_data.json")
         return design_file
 
-    def __init__(self, Q3DType, projectname=None, designname=None, solution_type=None, setup_name=None,
-                 specified_version=None, NG=False, AlwaysNew=False, release_on_exit=False, student_version=False):
+    def __init__(
+            self,
+            Q3DType,
+            projectname=None,
+            designname=None,
+            solution_type=None,
+            setup_name=None,
+            specified_version=None,
+            non_graphical=False,
+            new_desktop_session=False,
+            close_on_exit=False,
+            student_version=False,
+    ):
         if Q3DType == "Q3D Extractor":
-            FieldAnalysis3D.__init__(self, "Q3D Extractor", projectname, designname, solution_type, setup_name,
-                                     specified_version, NG, AlwaysNew, release_on_exit, student_version)
+            FieldAnalysis3D.__init__(
+                self,
+                "Q3D Extractor",
+                projectname,
+                designname,
+                solution_type,
+                setup_name,
+                specified_version,
+                non_graphical,
+                new_desktop_session,
+                close_on_exit,
+                student_version,
+            )
         else:
-            FieldAnalysis2D.__init__(self, "2D Extractor", projectname, designname, solution_type, setup_name,
-                                     specified_version, NG, AlwaysNew, release_on_exit, student_version)
+            FieldAnalysis2D.__init__(
+                self,
+                "2D Extractor",
+                projectname,
+                designname,
+                solution_type,
+                setup_name,
+                specified_version,
+                non_graphical,
+                new_desktop_session,
+                close_on_exit,
+                student_version,
+            )
 
     def __enter__(self):
         return self
-
-    def __exit__(self, ex_type, ex_value, ex_traceback):
-        """Push exit up to parent object Design."""
-        if ex_type:
-            exception_to_desktop(self, ex_value, ex_traceback)
-
 
 class Q3d(QExtractor, object):
     """Provides the Q3D application interface.
@@ -88,20 +99,23 @@ class Q3d(QExtractor, object):
         Name of the setup to use as the nominal. The default is
         ``None``, in which case the active setup is used or nothing
         is used.
-    specified_version: str, optional
+    specified_version : str, optional
         Version of AEDT to use. The default is ``None``, in which case
-        the active version or latest installed version is used. This parameter is ignored when Script is launched within AEDT.
+        the active version or latest installed version is used.
+        This parameter is ignored when Script is launched within AEDT.
     NG : bool, optional
         Whether to launch AEDT in the non-graphical mode. The default
-        is ``False``, in which case AEDT is launched in the graphical mode. This parameter is ignored when Script is launched within AEDT.
-    AlwaysNew : bool, optional
+        is ``False``, in which case AEDT is launched in the graphical mode.
+        This parameter is ignored when Script is launched within AEDT.
+    new_desktop_session : bool, optional
         Whether to launch an instance of AEDT in a new thread, even if
         another instance of the ``specified_version`` is active on the
         machine. The default is ``True``. This parameter is ignored when Script is launched within AEDT.
-    release_on_exit : bool, optional
+    close_on_exit : bool, optional
         Whether to release AEDT on exit. The default is ``False``.
     student_version : bool, optional
-        Whether to open the AEDT student version. The default is ``False``. This parameter is ignored when Script is launched within AEDT.
+        Whether to open the AEDT student version. The default is ``False``.
+        This parameter is ignored when Script is launched within AEDT.
 
     Examples
     --------
@@ -113,10 +127,31 @@ class Q3d(QExtractor, object):
 
     """
 
-    def __init__(self, projectname=None, designname=None, solution_type=None, setup_name=None,
-                 specified_version=None, NG=False, AlwaysNew=False, release_on_exit=False, student_version=True):
-        QExtractor.__init__(self, "Q3D Extractor", projectname, designname, solution_type, setup_name,
-                            specified_version, NG, AlwaysNew, release_on_exit, student_version)
+    def __init__(
+            self,
+            projectname=None,
+            designname=None,
+            solution_type=None,
+            setup_name=None,
+            specified_version=None,
+            non_graphical=False,
+            new_desktop_session=False,
+            close_on_exit=False,
+            student_version=False,
+    ):
+        QExtractor.__init__(
+            self,
+            "Q3D Extractor",
+            projectname,
+            designname,
+            solution_type,
+            setup_name,
+            specified_version,
+            non_graphical,
+            new_desktop_session,
+            close_on_exit,
+            student_version,
+        )
 
     @aedt_exception_handler
     def auto_identify_nets(self):
@@ -127,6 +162,10 @@ class Q3d(QExtractor, object):
         bool
             ``True`` when successful, ``False`` when failed.
 
+        References
+        ----------
+
+        >>> oModule.AutoIdentifyNets
         """
         self.oboundary.AutoIdentifyNets()
         return True
@@ -151,19 +190,24 @@ class Q3d(QExtractor, object):
 
         Returns
         -------
-        :class: `pyaedt.modules.Boundary.BoundaryObject`
+        :class:`pyaedt.modules.Boundary.BoundaryObject`
             Source object.
 
+        References
+        ----------
+
+        >>> oModule.AssignSource
         """
         a = self.modeler._get_faceid_on_axis(object_name, axisdir)
 
         if not source_name:
             source_name = generate_unique_name("Source")
         if not net_name:
-            net_name =object_name
+            net_name = object_name
         if a:
             props = OrderedDict(
-                {"Faces": [a], "ParentBndID": object_name, "TerminalType": "ConstantVoltage", "Net": net_name})
+                {"Faces": [a], "ParentBndID": object_name, "TerminalType": "ConstantVoltage", "Net": net_name}
+            )
             bound = BoundaryObject(self, source_name, props, "Source")
             if bound.create():
                 self.boundaries.append(bound)
@@ -187,9 +231,13 @@ class Q3d(QExtractor, object):
 
         Returns
         -------
-        :class: `pyaedt.modules.Boundary.BoundaryObject`
+        :class:`pyaedt.modules.Boundary.BoundaryObject`
             Source object.
 
+        References
+        ----------
+
+        >>> oModule.AssignSource
         """
         if not sourcename:
             sourcename = generate_unique_name("Source")
@@ -200,8 +248,7 @@ class Q3d(QExtractor, object):
         props["TerminalType"] = "ConstantVoltage"
         if netname:
             props["Net"] = netname
-        props = OrderedDict(
-            {"Objects": sheetname, "TerminalType": "ConstantVoltage", "Net": netname})
+        props = OrderedDict({"Objects": sheetname, "TerminalType": "ConstantVoltage", "Net": netname})
         bound = BoundaryObject(self, sourcename, props, "Source")
         if bound.create():
             self.boundaries.append(bound)
@@ -228,9 +275,13 @@ class Q3d(QExtractor, object):
 
         Returns
         -------
-        :class: `pyaedt.modules.Boundary.BoundaryObject`
+        :class:`pyaedt.modules.Boundary.BoundaryObject`
             Sink object.
 
+        References
+        ----------
+
+        >>> oModule.AssignSink
         """
         a = self.modeler._get_faceid_on_axis(object_name, axisdir)
 
@@ -240,7 +291,8 @@ class Q3d(QExtractor, object):
             net_name = object_name
         if a:
             props = OrderedDict(
-                {"Faces": [a], "ParentBndID": object_name, "TerminalType": "ConstantVoltage", "Net": net_name})
+                {"Faces": [a], "ParentBndID": object_name, "TerminalType": "ConstantVoltage", "Net": net_name}
+            )
             bound = BoundaryObject(self, sink_name, props, "Sink")
             if bound.create():
                 self.boundaries.append(bound)
@@ -264,9 +316,13 @@ class Q3d(QExtractor, object):
 
         Returns
         -------
-        :class: `pyaedt.modules.Boundary.BoundaryObject`
+        :class:`pyaedt.modules.Boundary.BoundaryObject`
             Source object.
 
+        References
+        ----------
+
+        >>> oModule.AssignSink
         """
         if not sinkname:
             sinkname = generate_unique_name("Source")
@@ -278,8 +334,7 @@ class Q3d(QExtractor, object):
         if netname:
             props["Net"] = netname
 
-        props = OrderedDict(
-            {"Objects": sheetname, "TerminalType": "ConstantVoltage", "Net": netname})
+        props = OrderedDict({"Objects": sheetname, "TerminalType": "ConstantVoltage", "Net": netname})
         bound = BoundaryObject(self, sinkname, props, "Sink")
         if bound.create():
             self.boundaries.append(bound)
@@ -311,6 +366,10 @@ class Q3d(QExtractor, object):
         bool
             ``True`` when successful, ``False`` when failed.
 
+        References
+        ----------
+
+        >>> oModule.InsertSweep
         """
         if sweepname is None:
             sweepname = generate_unique_name("Sweep")
@@ -322,15 +381,15 @@ class Q3d(QExtractor, object):
                 setupdata = i
                 for sw in setupdata.sweeps:
                     if sweepname == sw.name:
-                        self._messenger.add_warning_message(
-                            "Sweep {} is already present. Rename and retry.".format(sweepname))
+                        self.logger.warning(
+                            "Sweep %s is already present. Rename and retry.", sweepname)
                         return False
                 sweepdata = setupdata.add_sweep(sweepname, "Discrete")
                 sweepdata.props["RangeStart"] = str(freqstart) + "GHz"
                 if not freqstop:
                     freqstop = freqstart
                 if not freqstep:
-                    freqstep = (freqstop-freqstart)/11
+                    freqstep = (freqstop - freqstart) / 11
                     if freqstep == 0:
                         freqstep = freqstart
                 sweepdata.props["RangeEnd"] = str(freqstop) + "GHz"
@@ -344,7 +403,9 @@ class Q3d(QExtractor, object):
         return False
 
     @aedt_exception_handler
-    def create_discrete_sweep(self, setupname, freqstart, freqstop=None, freqstep=None, units="GHz", sweepname=None, savefields=False):
+    def create_discrete_sweep(
+            self, setupname, freqstart, freqstop=None, freqstep=None, units="GHz", sweepname=None, savefields=False
+    ):
         """Create a discrete sweep with a single frequency value.
 
         Parameters
@@ -371,6 +432,11 @@ class Q3d(QExtractor, object):
         -------
         SweepQ3D
             Sweep option.
+
+        References
+        ----------
+
+        >>> oModule.InsertSweep
         """
         if sweepname is None:
             sweepname = generate_unique_name("Sweep")
@@ -382,19 +448,19 @@ class Q3d(QExtractor, object):
                 setupdata = i
                 for sw in setupdata.sweeps:
                     if sweepname == sw.name:
-                        self._messenger.add_warning_message(
-                            "Sweep {} already present. Please rename and retry".format(sweepname))
+                        self.logger.warning(
+                            "Sweep %s already present. Please rename and retry", sweepname)
                         return False
                 sweepdata = setupdata.add_sweep(sweepname, "Discrete")
-                sweepdata.props["RangeStart"] = str(freqstart)+"GHz"
+                sweepdata.props["RangeStart"] = str(freqstart) + "GHz"
                 if not freqstop:
                     freqstop = freqstart
                 if not freqstep:
                     freqstep = (freqstop - freqstart) / 11
                     if freqstep == 0:
                         freqstep = freqstart
-                sweepdata.props["RangeEnd"] = str(freqstop)+"GHz"
-                sweepdata.props["RangeStep"] = str(freqstep)+"GHz"
+                sweepdata.props["RangeEnd"] = str(freqstop) + "GHz"
+                sweepdata.props["RangeStep"] = str(freqstep) + "GHz"
                 sweepdata.props["SaveFields"] = savefields
                 sweepdata.props["SaveRadFields"] = False
                 sweepdata.props["Type"] = "Discrete"
@@ -428,20 +494,24 @@ class Q2d(QExtractor, object):
         Name of the setup to use as the nominal. The default is
         ``None``, in which case the active setup is used or
         nothing is used.
-    specified_version: str, optional
+    specified_version : str, optional
         Version of AEDT to use. The default is ``None``, in which case
-        the active version or latest installed version is used. This parameter is ignored when Script is launched within AEDT.
+        the active version or latest installed version is used.  This
+        parameter is ignored when Script is launched within AEDT.
     NG : bool, optional
         Whether to launch AEDT in the non-graphical mode. The default
-        is ``False``, in which case AEDT is launched in the graphical mode. This parameter is ignored when Script is launched within AEDT.
-    AlwaysNew : bool, optional
+        is ``False``, in which case AEDT is launched in the graphical mode.
+        This parameter is ignored when Script is launched within AEDT.
+    new_desktop_session : bool, optional
         Whether to launch an instance of AEDT in a new thread, even if
         another instance of the ``specified_version`` is active on the
-        machine. The default is ``True``. This parameter is ignored when Script is launched within AEDT.
-    release_on_exit : bool, optional
+        machine. The default is ``True``. This parameter is ignored
+        when Script is launched within AEDT.
+    close_on_exit : bool, optional
         Whether to release AEDT on exit. The default is ``False``.
     student_version : bool, optional
-        Whether to open the AEDT student version. This parameter is ignored when Script is launched within AEDT.
+        Whether to open the AEDT student version. This parameter is
+        ignored when Script is launched within AEDT.
 
     Examples
     --------
@@ -463,12 +533,206 @@ class Q2d(QExtractor, object):
     >>> app = Q2d("myfile.aedt")
 
     """
-    @property   # for legacy purposes
+
+    @property  # for legacy purposes
     def dim(self):
         """Dimension."""
         return self.modeler.dimension
 
-    def __init__(self, projectname=None, designname=None, solution_type=None, setup_name=None,
-                 specified_version=None, NG=False, AlwaysNew=False, release_on_exit=False, student_version=False):
-        QExtractor.__init__(self, "2D Extractor", projectname, designname, solution_type, setup_name,
-                            specified_version, NG, AlwaysNew, release_on_exit, student_version)
+    def __init__(
+            self,
+            projectname=None,
+            designname=None,
+            solution_type=None,
+            setup_name=None,
+            specified_version=None,
+            non_graphical=False,
+            new_desktop_session=False,
+            close_on_exit=False,
+            student_version=False,
+    ):
+        QExtractor.__init__(
+            self,
+            "2D Extractor",
+            projectname,
+            designname,
+            solution_type,
+            setup_name,
+            specified_version,
+            non_graphical,
+            new_desktop_session,
+            close_on_exit,
+            student_version,
+        )
+
+    def create_rectangle(self, position, dimension_list, name="", matname=""):
+        """
+        Create a rectangle.
+
+        Parameters
+        ----------
+        position : list
+            List of [x, y] coordinates for the starting point of the rectangle.
+        dimension_list : list
+            List of [width, height] dimensions.
+        name : str, optional
+            Name of the rectangle. The default is ``None``, in which case
+            the default name is assigned.
+        matname : str, optional
+            Name of the material. The default is ``None``, in which case
+            the default material is assigned.
+        Returns
+        -------
+        pyaedt.modeler.Object3d.Object3d
+            3D object.
+
+        References
+        ----------
+
+        >>> oEditor.CreateRectangle
+        """
+        return self.modeler.primitives.create_rectangle(position, dimension_list=dimension_list, name=name,
+                                                        matname=matname)
+
+    def assign_single_signal_line(self, target_objects, name="", solve_option="SolveInside", thickness=None, unit="um"):
+        """Assign conductor type to sheets.
+
+        Parameters
+        ----------
+        target_objects : list
+            List of Object3D.
+        name : str
+            Name of the conductor.
+        solve_option : str, optional
+            Method for solving. Options are ``"SolveInside"``, ``"SolveOnBoundary"`` or ``"Automatic"``. The default is
+            ``"SolveInside"``.
+        thickness : float, optional
+            Conductor thickness. The default is ``None``, in which case the conductor thickness is obtained by dividing
+            the conductor's area by its perimeter (A/p). If multiple conductors are selected, the average conductor
+            thickness is used.
+        unit : str, optional
+            Thickness unit. The default is ``"um"``.
+
+        References
+        ----------
+
+        >>> oModule.AssignSingleSignalLine
+        >>> oModule.AssignSingleReferenceGround
+        """
+
+        warnings.warn('`assign_single_signal_line` is deprecated. Use `assign_single_conductor` instead.',
+                      DeprecationWarning)
+        self.assign_single_conductor(target_objects, name, "SignalLine", solve_option,
+                                thickness, unit)
+
+    def assign_single_conductor(self, target_objects, name="", conductor_type="SignalLine", solve_option="SolveInside",
+                                thickness=None, unit="um"):
+        """
+        Assign conductor type to sheets.
+
+        Parameters
+        ----------
+        target_objects : list
+            List of Object3D.
+        name : str
+            Name of the conductor.
+        conductor_type : str
+            Type of conductor. Options are ``"SignalLine"``, ``"ReferenceGround"``. The default is SignalLine.
+        solve_option : str, optional
+            Method for solving. Options are ``"SolveInside"``, ``"SolveOnBoundary"`` or ``"Automatic"``. The default is
+            ``"SolveInside"``.
+        thickness : float, optional
+            Conductor thickness. The default is ``None``, in which case the conductor thickness is obtained by dividing
+            the conductor's area by its perimeter (A/p). If multiple conductors are selected, the average conductor
+            thickness is used.
+        unit : str, optional
+            Thickness unit. The default is ``"um"``.
+        Returns
+        -------
+        bool
+            ``True`` when successful, ``False`` when failed.
+
+        References
+        ----------
+
+        >>> oModule.AssignSingleSignalLine
+        >>> oModule.AssignSingleReferenceGround
+        """
+        if not name:
+            name = generate_unique_name(name)
+
+        if isinstance(target_objects, list):
+            a = target_objects
+            obj_names = [i.name for i in target_objects]
+        else:
+            a = [target_objects]
+            obj_names = [target_objects.name]
+
+        if not thickness:
+            t_list = []
+            for t_obj in a:
+                perimeter = 0
+                for edge in t_obj.edges:
+                    perimeter = perimeter + edge.length
+                t_list.append(t_obj.faces[0].area / perimeter)
+            thickness = sum(t_list) / len(t_list)
+
+        props = OrderedDict({"Objects": obj_names,
+                             "SolveOption": solve_option,
+                             "Thickness": str(thickness) + unit
+                             }
+                            )
+
+        arg = ["NAME:" + name]
+        _dict2arg(props, arg)
+        if conductor_type == "SignalLine":
+            self.oboundary.AssignSingleSignalLine(arg)
+        elif conductor_type == "ReferenceGround":
+            self.oboundary.AssignSingleReferenceGround(arg)
+        else:
+            return False
+
+        return True
+
+    def assign_huray_finitecond_to_edges(self, edges, radius, ratio, unit="um", name=""):
+        """
+        Assign Huray surface roughness model to edges.
+
+        Parameters
+        ----------
+        radius :
+        ratio :
+        unit :
+        edges :
+        name :
+        model_type :
+
+        Returns
+        -------
+        :class:`pyaedt.modules.Boundary.BoundaryObject`
+            Source object.
+
+        References
+        ----------
+
+        >>> oMdoule.AssignFiniteCond
+        """
+        if not name:
+            name = generate_unique_name(name)
+
+        if not isinstance(radius, str):
+            ra = str(radius) + unit
+        else:
+            ra = radius
+
+        a = self.modeler._convert_list_to_ids(edges, convert_objects_ids_to_name=False)
+
+        props = OrderedDict(
+            {"Edges": a, "UseCoating": False, "Radius": ra, "Ratio": str(ratio)}
+        )
+
+        bound = BoundaryObject(self, name, props, "FiniteCond")
+        if bound.create():
+            self.boundaries.append(bound)
+            return bound
+        return False

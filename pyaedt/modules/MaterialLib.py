@@ -2,51 +2,36 @@
 This module contains the `Materials` class.
 """
 from __future__ import absolute_import
-import os
-import xml.etree.ElementTree as ET
-from .Material import *
-from ..generic.general_methods import aedt_exception_handler
+
 import json
+import copy
+from pyaedt.generic.DataHandlers import _arg2dict
+from pyaedt.generic.general_methods import aedt_exception_handler, _retry_ntimes, generate_unique_name
+from pyaedt.modules.Material import Material, SurfaceMaterial, MatProperties, OrderedDict
+
 
 class Materials(object):
     """Contains the AEDT materials database and all methods for creating and editing materials.
 
     Parameters
     ----------
-    parent : str
+    app : :class:`pyaedt.application.Analysis3D.FieldAnalysis3D`
         Inherited parent object.
 
+    Examples
+    --------
+    >>>from pyaedt import Hfss
+    >>>app = Hfss()
+    >>>materials = app.materials
     """
-    @property
-    def odefinition_manager(self):
-        """Definition manager."""
-        return self._parent._oproject.GetDefinitionManager()
-
-    @property
-    def omaterial_manager(self):
-        """Material manager.
-        """
-        return self.odefinition_manager.GetManager("Material")
-
-    @property
-    def _messenger(self):
-        """Messenger.
-
-        Returns
-        -------
-        MessageManager
-            Message manager object.
-        """
-        return self._parent._messenger
-
-    @property
-    def oproject(self):
-        """Project."""
-        return self._parent.oproject
-
-    def __init__(self, parent):
-        self._parent = parent
-        self._messenger.logger.info('Successfully loaded project materials !')
+    def __init__(self, app):
+        self._app = app
+        self.odefinition_manager = self._app.odefinition_manager
+        self.omaterial_manager = self._app.omaterial_manager
+        self._desktop = self._app.odesktop
+        self._oproject = self._app.oproject
+        self.logger = self._app.logger
+        self.logger.info("Successfully loaded project materials !")
         self.material_keys = self._get_materials()
         self.surface_material_keys = self._get_surface_materials()
         self._load_from_project()
@@ -70,8 +55,10 @@ class Materials(object):
         """Get materials."""
         mats = {}
         try:
-            for ds in self._parent.project_properies['AnsoftProject']['Definitions']['Materials']:
-                mats[ds.lower()] = Material(self, ds.lower(), self._parent.project_properies['AnsoftProject']['Definitions']['Materials'][ds])
+            for ds in self._app.project_properies["AnsoftProject"]["Definitions"]["Materials"]:
+                mats[ds.lower()] = Material(
+                    self, ds.lower(), self._app.project_properies["AnsoftProject"]["Definitions"]["Materials"][ds]
+                )
         except:
             pass
         return mats
@@ -80,8 +67,12 @@ class Materials(object):
     def _get_surface_materials(self):
         mats = {}
         try:
-            for ds in self._parent.project_properies['AnsoftProject']['Definitions']['SurfaceMaterials']:
-                mats[ds.lower()] = SurfaceMaterial(self, ds.lower(), self._parent.project_properies['AnsoftProject']['Definitions']['SurfaceMaterials'][ds])
+            for ds in self._app.project_properies["AnsoftProject"]["Definitions"]["SurfaceMaterials"]:
+                mats[ds.lower()] = SurfaceMaterial(
+                    self,
+                    ds.lower(),
+                    self._app.project_properies["AnsoftProject"]["Definitions"]["SurfaceMaterials"][ds],
+                )
         except:
             pass
         return mats
@@ -101,6 +92,11 @@ class Materials(object):
         bool
             ``True`` when successful, ``False`` when failed.
 
+        References
+        ----------
+
+        >>> oDefinitionManager.GetProjectMaterialNames
+        >>> oMaterialManager.GetData
         """
         mat = mat.lower()
         lista = [i.lower() for i in list(self.odefinition_manager.GetProjectMaterialNames())]
@@ -140,7 +136,7 @@ class Materials(object):
         if exists:
             omat = self.material_keys[mat]
             for el in MatProperties.aedtname:
-                if omat.__dict__["_"+el].thermalmodifier:
+                if omat.__dict__["_" + el].thermalmodifier:
                     return True
         return False
 
@@ -160,7 +156,12 @@ class Materials(object):
 
         Returns
         -------
-        :class: `pyaedt.modules.Material.Material`
+        :class:`pyaedt.modules.Material.Material`
+
+        References
+        ----------
+
+        >>> oDefinitionManager.AddMaterial
 
         Examples
         --------
@@ -170,17 +171,21 @@ class Materials(object):
         >>> mat = hfss.materials.add_material("MyMaterial")
         >>> print(mat.conductivity.value)
 
+        >>> oDefinitionManager.GetProjectMaterialNames
+        >>> oMaterialManager.GetData
+
         """
         materialname = materialname.lower()
-        self._messenger.add_info_message('Adding new material to the Project Library: ' + materialname)
+        self.logger.info("Adding new material to the Project Library: " + materialname)
         if materialname in self.material_keys:
-            self._messenger.add_warning_message(
-                "Warning. The material is already in the database. Change or edit the name.")
+            self.logger.warning(
+                "Warning. The material is already in the database. Change or edit the name."
+            )
             return self.material_keys[materialname]
         else:
-            material = Material(self._parent, materialname, props)
+            material = Material(self._app, materialname, props)
             material.update()
-            self._messenger.add_info_message("Material has been added. Edit it to update in Desktop.")
+            self.logger.info("Material has been added. Edit it to update in Desktop.")
             self.material_keys[materialname] = material
             return self.material_keys[materialname]
 
@@ -200,7 +205,12 @@ class Materials(object):
 
         Returns
         -------
-        :class: `pyaedt.modules.SurfaceMaterial`
+        :class:`pyaedt.modules.SurfaceMaterial`
+
+        References
+        ----------
+
+        >>> oDefinitionManager.AddSurfaceMaterial
 
         Examples
         --------
@@ -209,38 +219,40 @@ class Materials(object):
         >>> hfss = Hfss()
         >>> mat = hfss.materials.add_surface_material("Steel", 0.85)
         >>> print(mat.emissivity.value)
+
         """
 
         materialname = material_name.lower()
-        self._messenger.add_info_message('Adding a surface material to the project library: ' + materialname)
+        self.logger.info("Adding a surface material to the project library: " + materialname)
         if materialname in self.surface_material_keys:
-            self._messenger.add_warning_message(
-                "Warning. The material is already in the database. Change the name or edit it.")
+            self.logger.warning(
+                "Warning. The material is already in the database. Change the name or edit it."
+            )
             return self.surface_material_keys[materialname]
         else:
-            material = SurfaceMaterial(self._parent, materialname)
+            material = SurfaceMaterial(self._app, materialname)
             if emissivity:
                 material.emissivity = emissivity
                 material.update()
-            self._messenger.add_info_message("Material has been added. Edit it to update in Desktop.")
+            self.logger.info("Material has been added. Edit it to update in Desktop.")
             self.surface_material_keys[materialname] = material
             return self.surface_material_keys[materialname]
 
     @aedt_exception_handler
     def _create_mat_project_vars(self, matlist):
-        matprop={}
+        matprop = {}
         tol = 1e-12
         for prop in MatProperties.aedtname:
             matprop[prop] = []
             for mat in matlist:
                 try:
-                    matprop[prop].append(float(mat.__dict__["_"+prop].value))
+                    matprop[prop].append(float(mat.__dict__["_" + prop].value))
                 except:
-                    self._messenger.add_warning_message("Warning. Wrong parsed property. Reset to 0")
+                    self.logger.warning("Warning. Wrong parsed property. Reset to 0")
                     matprop[prop].append(0)
             try:
                 a = sum(matprop[prop])
-                if a <tol:
+                if a < tol:
                     del matprop[prop]
             except:
                 pass
@@ -269,6 +281,11 @@ class Materials(object):
         int
             Index of the project variable.
 
+        References
+        ----------
+
+        >>> oDefinitionManager.AddMaterial
+
         Examples
         --------
 
@@ -277,7 +294,6 @@ class Materials(object):
         >>> hfss.materials.add_material("MyMaterial")
         >>> hfss.materials.add_material("MyMaterial2")
         >>> hfss.materials.add_material_sweep(["MyMaterial", "MyMaterial2"], "Sweep_copper")
-
         """
         matsweep = []
         matname = matname.lower()
@@ -290,14 +306,14 @@ class Materials(object):
 
         mat_dict = self._create_mat_project_vars(matsweep)
 
-        newmat = Material(self._parent, matname)
-        index = "$ID"+matname
-        self._parent[index] = 0
+        newmat = Material(self._app, matname)
+        index = "$ID" + matname
+        self._app[index] = 0
         for el in mat_dict:
             if el in list(mat_dict.keys()):
-                self._parent["$"+matname+el] = mat_dict[el]
-                newmat.__dict__["_"+el].value = "$"+matname+el+"["+ index + "]"
-                newmat._update_props(el, "$"+matname+el+"["+ index + "]", False)
+                self._app["$" + matname + el] = mat_dict[el]
+                newmat.__dict__["_" + el].value = "$" + matname + el + "[" + index + "]"
+                newmat._update_props(el, "$" + matname + el + "[" + index + "]", False)
 
         newmat.update()
         self.material_keys[matname] = newmat
@@ -316,7 +332,12 @@ class Materials(object):
 
         Returns
         -------
-        :class: `pyaedt.modules.Material.Material`
+        :class:`pyaedt.modules.Material.Material`
+
+        References
+        ----------
+
+        >>> oDefinitionManager.AddMaterial
 
         Examples
         --------
@@ -328,7 +349,7 @@ class Materials(object):
 
         """
         if material.lower() not in list(self.material_keys.keys()):
-            self._messenger.add_error_message("Material {} is not present".format(material))
+            self.logger.error("Material {} is not present".format(material))
             return False
         newmat = Material(self, new_name.lower(), self.material_keys[material.lower()]._props)
         newmat.update()
@@ -348,7 +369,12 @@ class Materials(object):
 
         Returns
         -------
-        :class: `pyaedt.modules.SurfaceMaterial`
+        :class:`pyaedt.modules.SurfaceMaterial`
+
+        References
+        ----------
+
+        >>> oDefinitionManager.AddSurfaceMaterial
 
         Examples
         --------
@@ -357,10 +383,9 @@ class Materials(object):
         >>> hfss = Hfss()
         >>> hfss.materials.add_surface_material("MyMaterial")
         >>> hfss.materials.duplicate_surface_material("MyMaterial", "MyMaterial2")
-
         """
         if not material.lower() in list(self.surface_material_keys.keys()):
-            self._messenger.add_error_message("Material {} is not present".format(material))
+            self.logger.error("Material {} is not present".format(material))
             return False
         newmat = SurfaceMaterial(self, new_name.lower(), self.surface_material_keys[material.lower()]._props)
         newmat.update()
@@ -384,6 +409,10 @@ class Materials(object):
         bool
             ``True`` when successful, ``False`` when failed.
 
+        References
+        ----------
+
+        >>> oDefinitionManager.RemoveMaterial
 
         Examples
         --------
@@ -395,7 +424,7 @@ class Materials(object):
 
         """
         if material not in list(self.material_keys.keys()):
-            self._messenger.add_error_message("Material {} is not present".format(material))
+            self.logger.error("Material {} is not present".format(material))
             return False
         self.odefinition_manager.RemoveMaterial(material, True, "", library)
         del self.material_keys[material]
@@ -440,13 +469,13 @@ class Materials(object):
                 try:
                     self._aedmattolibrary(el)
                 except Exception as e:
-                    self._messenger.add_info_message('aedmattolibrary failed for material {}'.format(el))
+                    self.logger.info("aedmattolibrary failed for material %s", el)
 
     @aedt_exception_handler
     def _aedmattolibrary(self, matname):
         matname = matname.lower()
         props = {}
-        arg2dict(list(self.omaterial_manager.GetData(matname)), props)
+        _arg2dict(list(_retry_ntimes(20, self.omaterial_manager.GetData, matname)), props)
         values_view = props.values()
         value_iterator = iter(values_view)
         first_value = next(value_iterator)
@@ -469,36 +498,57 @@ class Materials(object):
             ``True`` when successful, ``False`` when failed.
 
         """
+
         def find_datasets(d, out_list):
             for k, v in d.items():
-                if isinstance(v, dict):
+                if isinstance(v, (dict, OrderedDict)):
                     find_datasets(v, out_list)
                 else:
-                    if "pwl(" in str(v):
-                        out_list.append(v[v.find("$"):v.find(",")])
+                    a = copy.deepcopy(v)
+                    val = a
+                    if str(type(a)) == r"<type 'List'>":
+                        val = list(a)
+                    if "pwl(" in str(val):
+                        out_list.append(a[a.find("$") : a.find(",")])
+
         # Data to be written
-        output_dict = OrderedDict()
+        output_dict = {}
         for el, val in self.material_keys.items():
-            output_dict[el] = val._props
+            output_dict[el] = copy.deepcopy(val._props)
         out_list = []
         find_datasets(output_dict, out_list)
         datasets = OrderedDict()
         for ds in out_list:
-            if ds in list(self._parent.project_datasets.keys()):
-                d = self._parent.project_datasets[ds]
+            if ds in list(self._app.project_datasets.keys()):
+                d = self._app.project_datasets[ds]
                 if d.z:
-                    datasets[ds] = OrderedDict({"Coordinates": OrderedDict({"DimUnits": [d.xunit, d.yunit, d.zunit],
-                                                                            "Points": [val for tup in zip(d.x, d.y, d.z)
-                                                                                       for val in tup]})})
+                    datasets[ds] = OrderedDict(
+                        {
+                            "Coordinates": OrderedDict(
+                                {
+                                    "DimUnits": [d.xunit, d.yunit, d.zunit],
+                                    "Points": [val for tup in zip(d.x, d.y, d.z) for val in tup],
+                                }
+                            )
+                        }
+                    )
                 else:
-                    datasets[ds] = OrderedDict({"Coordinates": OrderedDict(
-                        {"DimUnits": [d.xunit, d.yunit], "Points": [val for tup in zip(d.x, d.y) for val in tup]})})
+                    datasets[ds] = OrderedDict(
+                        {
+                            "Coordinates": OrderedDict(
+                                {
+                                    "DimUnits": [d.xunit, d.yunit],
+                                    "Points": [val for tup in zip(d.x, d.y) for val in tup],
+                                }
+                            )
+                        }
+                    )
         json_dict = {}
         json_dict["materials"] = output_dict
         if datasets:
             json_dict["datasets"] = datasets
 
-        with open(full_json_path, 'w') as fp:
+        with open(full_json_path, "w") as fp:
             json.dump(json_dict, fp, indent=4)
         return True
 
@@ -526,21 +576,24 @@ class Materials(object):
                 yunit = val["Coordinates"]["DimUnits"][1]
                 zunit = ""
 
-                new_list = [val["Coordinates"]['Points'][i:i + numcol]
-                            for i in range(0, len(val["Coordinates"]['Points']), numcol)]
+                new_list = [
+                    val["Coordinates"]["Points"][i : i + numcol]
+                    for i in range(0, len(val["Coordinates"]["Points"]), numcol)
+                ]
                 xval = new_list[0]
                 yval = new_list[1]
                 zval = None
                 if numcol > 2:
                     zunit = val["Coordinates"]["DimUnits"][2]
                     zval = new_list[2]
-                self._parent.create_dataset(el[1:], xunit=xunit, yunit=yunit, zunit=zunit,
-                                            xlist=xval, ylist=yval, zlist=zval)
+                self._app.create_dataset(
+                    el[1:], xunit=xunit, yunit=yunit, zunit=zunit, xlist=xval, ylist=yval, zlist=zval
+                )
 
         for el, val in data["materials"].items():
             if el.lower() in list(self.material_keys.keys()):
-                newname =generate_unique_name(el)
-                self._messenger.add_warning_message("Material {} already exists. Renaming to {}".format(el, newname))
+                newname = generate_unique_name(el)
+                self.logger.warning("Material %s already exists. Renaming to %s", el, newname)
             else:
                 newname = el
             newmat = Material(self, newname, val)

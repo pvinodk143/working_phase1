@@ -1,58 +1,62 @@
+# -*- coding: utf-8 -*-
+from pyaedt.generic.general_methods import aedt_exception_handler, _retry_ntimes
+from pyaedt.modules.LayerStackup import Layers
+from pyaedt.modeler.Modeler import Modeler
+from pyaedt.modeler.Primitives3DLayout import Primitives3DLayout
+from pyaedt.modeler.PrimitivesEmit import EmitComponents
+from pyaedt.modeler.PrimitivesNexxim import NexximComponents
+from pyaedt.modeler.PrimitivesSimplorer import SimplorerComponents
+from pyaedt.modeler.Object3d import CircuitComponent
+from pyaedt.modeler.Object3d import _dim_arg
+from pyaedt.generic.constants import AEDT_UNITS
 
-
-import os
-
-from ..generic.general_methods import generate_unique_name, aedt_exception_handler, retry_ntimes
-from ..application.Variables import AEDT_units
-from ..edb import Edb
-from .Modeler import Modeler
-from .PrimitivesSimplorer import SimplorerComponents
-from .PrimitivesNexxim import NexximComponents
-from .Primitives3DLayout import Primitives3DLayout
-from ..modules.LayerStackup import Layers
-import sys
 
 class ModelerCircuit(Modeler):
     """ModelerCircuit class.
 
     Parameters
     ----------
-    parent :
+    app : :class:`pyaedt.application.AnalysisNexxim.FieldAnalysisCircuit`
 
+    Examples
+    --------
+    >>> from pyaedt import Circuit
+    >>> app = Circuit()
+    >>> my_modeler = app.modeler
     """
 
-    def __init__(self, parent):
-        self._parent = parent
-        Modeler.__init__(self, parent)
+    def __init__(self, app):
+        self._app = app
+        self._oeditor = self._odesign.SetActiveEditor("SchematicEditor")
+        self.o_def_manager = self._app.odefinition_manager
+        self.o_component_manager = self.o_def_manager.GetManager("Component")
+        self.o_model_manager = self.o_def_manager.GetManager("Model")
+
+        Modeler.__init__(self, app)
 
     @property
     def oeditor(self):
-        """Editor."""
-        return self.odesign.SetActiveEditor("SchematicEditor")
+        """Oeditor Module.
+
+        References
+        ----------
+
+        >>> oEditor = oDesign.SetActiveEditor("SchematicEditor")"""
+        return self._oeditor
 
     @property
     def obounding_box(self):
-        """Bounding box."""
+        """Bounding box.
+
+        References
+        ----------
+
+        >>> oEditor.GetModelBoundingBox()"""
         return self.oeditor.GetModelBoundingBox()
-
-    @property
-    def o_def_manager(self):
-        """Definition manager."""
-        return self._parent.oproject.GetDefinitionManager()
-
-    @property
-    def o_component_manager(self):
-        """Component."""
-        return self.o_def_manager.GetManager("Component")
-
-    @property
-    def o_model_manager(self):
-        """Model manager."""
-        return self.o_def_manager.GetManager("Model")
 
     @aedt_exception_handler
     def connect_schematic_components(self, firstcomponent, secondcomponent, pinnum_first=2, pinnum_second=1):
-        """Connect schematic components.Modd
+        """Connect schematic components.
 
         Parameters
         ----------
@@ -72,6 +76,10 @@ class ModelerCircuit(Modeler):
         bool
             ``True`` when successful, ``False`` when failed.
 
+        References
+        ----------
+
+        >>> oEditor.CreateWire
         """
         obj1 = self.components[firstcomponent]
         if "Port" in obj1.composed_name:
@@ -101,33 +109,44 @@ class ModelerNexxim(ModelerCircuit):
 
     Parameters
     ----------
-    parent :
+    app : :class:`pyaedt.application.AnalysisNexxim.FieldAnalysisCircuit`
 
     """
 
-    def __init__(self, parent):
-        self._parent = parent
-        ModelerCircuit.__init__(self, parent)
-        self.components = NexximComponents(parent, self)
+    def __init__(self, app):
+        self._app = app
+        ModelerCircuit.__init__(self, app)
+        self._schematic = NexximComponents(self)
+        self.layouteditor = None
+        if self._app.design_type != "Twin Builder":
+            self.layouteditor = self._odesign.SetActiveEditor("Layout")
+            self._odesign.SetActiveEditor("SchematicEditor")
+        self.layers = Layers(self, roughnessunits="um")
+        self._primitives = Primitives3DLayout(self)
+        self._primitivesDes = self._app.project_name + self._app.design_name
 
-        self.layers = Layers(parent, self, roughnessunits="um")
-        self._primitives = Primitives3DLayout(self._parent, self)
-        self._primitivesDes = self._parent.project_name + self._parent.design_name
-        # edb_folder = os.path.join(self._parent.project_path, self._parent.project_name + ".aedb")
-        # edb_file = os.path.join(edb_folder, "edb.def")
-        # if os.path.exists(edb_file):
-        #     self._mttime = os.path.getmtime(edb_file)
-        #     _main = sys.modules['__main__']
-        #     if "isoutsideDesktop" in dir(_main) and not _main.isoutsideDesktop and self._parent.oproject.GetEDBHandle():
-        #         try:
-        #             self._edb = Edb(edb_folder, self._parent.design_name, True, self._parent._aedt_version, isaedtowned=True,
-        #                             oproject=self._parent.oproject)
-        #         except:
-        #             self._edb = None
-        #     else:
-        #         self._edb = None
-        # else:
-        #     self._mttime = 0
+    @property
+    def schematic(self):
+        """Schematic Component.
+
+        Returns
+        -------
+        :class:`pyaedt.modeler.PrimitivesNexxim.NexximComponents`
+        """
+        return self._schematic
+
+    @property
+    def components(self):
+        """Schematic Component.
+
+        .. deprecated:: 0.4.13
+           Use :func:`Circuit.modeler.schematic` instead.
+
+        Returns
+        -------
+        :class:`pyaedt.modeler.PrimitivesNexxim.NexximComponents`
+        """
+        return self._schematic
 
     @property
     def edb(self):
@@ -135,80 +154,72 @@ class ModelerNexxim(ModelerCircuit):
 
         Returns
         -------
-        :class: `pyaedt.Edb`
+        :class:`pyaedt.Edb`
             edb_core object if it exists.
 
         """
-        #TODO Check while it crashes when multiple circuits are created
+        # TODO Check why it crashes when multiple circuits are created
         return None
-        # if self._parent.design_type == "Twin Builder":
-        #     return
-        # _main = sys.modules['__main__']
-        # if "isoutsideDesktop" in dir(_main) and not _main.isoutsideDesktop and self._parent.oproject.GetEDBHandle():
-        #     try:
-        #         edb_folder = os.path.join(self._parent.project_path, self._parent.project_name + ".aedb")
-        #         edb_file = os.path.join(edb_folder, "edb.def")
-        #         _mttime = os.path.getmtime(edb_file)
-        #         if _mttime != self._mttime:
-        #             self._edb = Edb(edb_folder, self._parent.design_name, True, self._parent._aedt_version,
-        #                             isaedtowned=True, oproject=self._parent.oproject)
-        #             self._mttime = _mttime
-        #         return self._edb
-        #     except:
-        #         self._edb = None
-        # else:
-        #     self._edb = None
-
-    @property
-    def layouteditor(self):
-        """Layout editor."""
-        if self._parent.design_type == "Twin Builder":
-            return
-        return self.odesign.SetActiveEditor("Layout")
 
     @property
     def model_units(self):
-        """Model units."""
-        return retry_ntimes(10, self.layouteditor.GetActiveUnits)
+        """Model units.
+
+        References
+        ----------
+
+        >>> oEditor.GetActiveUnits
+        >>> oEditor.SetActiveUnits
+        """
+        return _retry_ntimes(10, self.layouteditor.GetActiveUnits)
+
+    @property
+    def layout(self):
+        """Primitives.
+
+        Returns
+        -------
+        :class:`pyaedt.modeler.Primitives3DLayout.Primitives3DLayout`
+
+        """
+        if self._app.design_type == "Twin Builder":
+            return
+        if self._primitivesDes != self._app.project_name + self._app.design_name:
+            self._primitives = Primitives3DLayout(self)
+            self._primitivesDes = self._app.project_name + self._app.design_name
+        return self._primitives
 
     @property
     def primitives(self):
         """Primitives.
 
+        .. deprecated:: 0.4.13
+           Use :func:`Circuit.modeler.layout` instead.
+
         Returns
         -------
-        :class: `pyaedt.modeler.Primitives3DLayout.Primitives3DLayout`
+        :class:`pyaedt.modeler.Primitives3DLayout.Primitives3DLayout`
 
         """
-        if self._parent.design_type == "Twin Builder":
-            return
-        if self._primitivesDes != self._parent.project_name + self._parent.design_name:
-            self._primitives = Primitives3DLayout(self._parent, self)
-            self._primitivesDes = self._parent.project_name + self._parent.design_name
         return self._primitives
 
     @model_units.setter
     def model_units(self, units):
-        assert units in AEDT_units["Length"], "Invalid units string {0}".format(units)
-        ''' Set the model units as a string e.g. "mm" '''
-        self.oeditor.SetActivelUnits(
-            [
-                "NAME:Units Parameter",
-                "Units:=", units,
-                "Rescale:=", False
-            ])
+        assert units in AEDT_UNITS["Length"], "Invalid units string {0}".format(units)
+        """ Set the model units as a string e.g. "mm" """
+        self.oeditor.SetActivelUnits(["NAME:Units Parameter", "Units:=", units, "Rescale:=", False])
 
     @aedt_exception_handler
-    def move(self, selections, posx, posy):
+    def move(self, selections, pos, units="meter"):
         """Move the selections by ``[x, y]``.
 
         Parameters
         ----------
         selections : list
             List of the selections.
-        posx : float
-            Offset for the X axis.
-        posy : float
+        pos : list
+            Offset for the ``[x, y]`` axis.
+        units : str
             Offset for the Y axis.
 
         Returns
@@ -216,27 +227,32 @@ class ModelerNexxim(ModelerCircuit):
         bool
             ``True`` when successful, ``False`` when failed.
 
+        References
+        ----------
+
+        >>> oEditor.Move
         """
-        if type(selections) is str:
+        if not isinstance(selections, list):
             selections = [selections]
         sels = []
         for sel in selections:
-            for el in list(self.components.components.values()):
-                if sel == el.InstanceName:
-                    sels.append(self.components.components[el.id].composed_name)
+            if isinstance(sel, int):
+                sels.append(self.schematic.components[sel].composed_name)
+            elif isinstance(sel, CircuitComponent):
+                sels.append(sel.composed_name)
+            else:
+                for el in list(self.schematic.components.values()):
+                    if sel == el.InstanceName or el.composed_name or el.name:
+                        sels.append(el.composed_name)
+
+        x_location = AEDT_UNITS["Length"][units] * float(pos[0])
+        y_location = AEDT_UNITS["Length"][units] * float(pos[1])
 
         self.oeditor.Move(
-            [
-                "NAME:Selections",
-                "Selections:=", sels
-            ],
-            [
-                "NAME:MoveParameters",
-                "xdelta:=", posx,
-                "ydelta:=", posy,
-                "Disconnect:=", False,
-                "Rubberband:=", False
-            ])
+            ["NAME:Selections", "Selections:=", sels],
+            ["NAME:MoveParameters", "xdelta:=", x_location, "ydelta:=", y_location, "Disconnect:=", False,
+             "Rubberband:=", False],
+        )
         return True
 
     @aedt_exception_handler
@@ -255,23 +271,22 @@ class ModelerNexxim(ModelerCircuit):
         bool
             ``True`` when successful, ``False`` when failed.
 
+        References
+        ----------
+
+        >>> oEditor.Rotate
         """
         sels = []
         for sel in selections:
             for el in list(self.components.components.values()):
                 if sel == el.InstanceName:
                     sels.append(self.components.components[el.id].composed_name)
+
         self.oeditor.Rotate(
-            [
-                "NAME:Selections",
-                "Selections:=", sels
-            ],
-            [
-                "NAME:RotateParameters",
-                "Degrees:=", degrees,
-                "Disconnect:=", False,
-                "Rubberband:=", False
-            ])
+            ["NAME:Selections", "Selections:=", sels],
+            ["NAME:RotateParameters", "Degrees:=", _dim_arg(degrees, "°"), "Disconnect:=", False, "Rubberband:=",
+             False],
+        )
         return True
 
 
@@ -280,24 +295,46 @@ class ModelerSimplorer(ModelerCircuit):
 
     Parameters
     ----------
-    parent :
+    app : :class:`pyaedt.application.AnalysisSimplorer.FieldAnalysisSimplorer`
 
     """
 
-    def __init__(self, parent):
-        self._parent = parent
-        ModelerCircuit.__init__(self, parent)
-        self.components = SimplorerComponents(parent, self)
+    def __init__(self, app):
+        self._app = app
+        ModelerCircuit.__init__(self, app)
+        self._components = SimplorerComponents(self)
+
+    @property
+    def components(self):
+        """
+        .. deprecated:: 0.4.13
+           Use :func:`Simplorer.modeler.schematic` instead.
+
+        """
+        return self._components
+
+    @property
+    def schematic(self):
+        """Schematic Object.
+
+        Returns
+        -------
+        :class:`pyaedt.modeler.PrimitivesSimplorer.SimplorerComponents`
+
+        """
+        return self._components
+
 
 class ModelerEmit(ModelerCircuit):
     """ModelerEmit class.
 
     Parameters
     ----------
-    parent :
+    app : :class:`pyaedt.application.AnalysisSimplorer.FieldAnalysisSimplorer`
 
     """
 
-    def __init__(self, parent):
-        self._parent = parent
-        ModelerCircuit.__init__(self, parent)
+    def __init__(self, app):
+        self._app = app
+        ModelerCircuit.__init__(self, app)
+        self.components = EmitComponents(app, self)

@@ -3,41 +3,30 @@ This module contains EDB general methods and related methods.
 
 """
 from __future__ import absolute_import
+
+import logging
 import warnings
 
+from pyaedt.generic.general_methods import aedt_exception_handler
 
 try:
     import clr
+
     clr.AddReference("System.Collections")
     from System.Collections.Generic import List
-    from System import Int32
 except ImportError:
-    warnings.warn('This module requires pythonnet.')
+    warnings.warn("This module requires pythonnet.")
 
-
-import inspect
-import itertools
-import sys
-import traceback
-from collections import OrderedDict
-from functools import wraps
-import logging
 logger = logging.getLogger(__name__)
-from ..generic.general_methods import aedt_exception_handler, generate_unique_name
-
-if "IronPython" in sys.version or ".NETFramework" in sys.version:
-    is_ironpython = True
-else:
-    is_ironpython = False
 
 
 @aedt_exception_handler
-def convert_netdict_to_pydict(dict):
+def convert_netdict_to_pydict(dict_in):
     """Convert a net dictionary to a Python dictionary.
 
     Parameters
     ----------
-    dict : dict
+    dict_in : dict
         Net dictionary to convert.
 
     Returns
@@ -47,9 +36,10 @@ def convert_netdict_to_pydict(dict):
 
     """
     pydict = {}
-    for key in dict.Keys:
-        pydict[key] = dict[key]
+    for key in dict_in.Keys:
+        pydict[key] = dict_in[key]
     return pydict
+
 
 @aedt_exception_handler
 def convert_pydict_to_netdict(dict):
@@ -69,6 +59,7 @@ def convert_pydict_to_netdict(dict):
     type = dict[dict.Keys[0]]
     # to be completed
 
+
 @aedt_exception_handler
 def convert_py_list_to_net_list(pylist):
     """Convert a Python list to a Net list.
@@ -83,7 +74,7 @@ def convert_py_list_to_net_list(pylist):
     list
         List converted to Net.
     """
-    if type(pylist) is not list and type(pylist) is not tuple:
+    if not isinstance(pylist, (list, tuple)):
         pylist = [pylist]
     ls = list([type(item) for item in pylist])
     if len(ls) > 0:
@@ -91,6 +82,7 @@ def convert_py_list_to_net_list(pylist):
         for el in pylist:
             net_list.Add(el)
         return net_list
+
 
 @aedt_exception_handler
 def convert_net_list_to_py_list(netlist):

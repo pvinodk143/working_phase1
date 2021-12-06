@@ -1,37 +1,48 @@
 import sys
-from collections import defaultdict
+import warnings
 
-from ..generic.general_methods import aedt_exception_handler, retry_ntimes
-from .Object3d import Padstack, Components3DLayout, Geometries3DLayout, Pins3DLayout, Nets3DLayout, \
-    _uname
-from .Primitives import _ironpython, default_materials
-from .GeometryOperators import GeometryOperators
-import pkgutil
-modules = [tup[1] for tup in pkgutil.iter_modules()]
-if 'clr' in modules or _ironpython:
+from pyaedt.generic.general_methods import aedt_exception_handler, is_ironpython
+from pyaedt.modeler.Object3d import Padstack, Components3DLayout, Geometries3DLayout, Pins3DLayout, Nets3DLayout, _uname
+from pyaedt.modeler.Primitives import default_materials
+from pyaedt.modeler.GeometryOperators import GeometryOperators
+# import pkgutil
+# modules = [tup[1] for tup in pkgutil.iter_modules()]
+# if "clr" in modules or is_ironpython:
+try:
     import clr
     from System import String
     import System
+except ImportError:
+    warnings.warn("Pythonnet has to be installed to run Pyaedt")
 
 
 class Primitives3DLayout(object):
     """Manages primitives in HFSS 3D Layout.
 
+    This class is inherited in the caller application and is accessible through the primitives variable part
+    of modeler object( eg. ``hfss3dlayout.modeler.primitives``).
+
     Parameters
     ----------
-    parent : str
-        Name of the parent AEDT application.
-    modeler : str
+    modeler : :class:`pyaedt.modeler.Model3DLayout.Modeler3DLayout`
         Name of the modeler.
 
+    Examples
+    --------
+    Basic usage demonstrated with an HFSS 3D Layout design:
+
+    >>> from pyaedt import Hfss3dLayout
+    >>> aedtapp = Hfss3dLayout()
+    >>> prim = aedtapp.modeler.primitives
     """
+
     @aedt_exception_handler
     def __getitem__(self, partname):
         """Retrieve a part.
 
         Parameters
         ----------
-        partname: int or str
+        partname : int or str
            Part ID or part name.
 
         Returns
@@ -45,18 +56,29 @@ class Primitives3DLayout(object):
                 return self.geometries[el]
         return None
 
-    def __init__(self, parent, modeler):
+    def __init__(self, modeler):
+        self.is_outside_desktop = sys.modules["__main__"].isoutsideDesktop
         self._modeler = modeler
-        self._parent = parent
-        self._currentId = 0
-        self.padstacks = defaultdict(Padstack)
-        self._components = defaultdict(Components3DLayout)
-        self._geometries = defaultdict(Geometries3DLayout)
-        self._pins = defaultdict(Pins3DLayout)
-        self._nets = defaultdict(Nets3DLayout)
-        self._main = sys.modules['__main__']
-        self.isoutsideDesktop = self._main.isoutsideDesktop
+        self._app = self._modeler._app
+        self._oeditor = self.modeler.oeditor
+        self._opadstackmanager = self._app._oproject.GetDefinitionManager().GetManager("Padstack")
+        self.padstacks = {}
+        self._components = {}
+        self._geometries = {}
+        self._pins = {}
+        self._nets = {}
         pass
+
+    @property
+    def opadstackmanager(self):
+        """Aedt oPadstackManager.
+
+        References
+        ----------
+
+        >>> oPadstackManger = oDefinitionManager.GetManager("Padstack")
+        """
+        return self._opadstackmanager
 
     @property
     def components(self):
@@ -71,7 +93,7 @@ class Primitives3DLayout(object):
         try:
             comps = list(self.modeler.edb.core_components.components.keys())
         except:
-            comps=[]
+            comps = []
         for el in comps:
             self._components[el] = Components3DLayout(self, el)
         return self._components
@@ -85,35 +107,46 @@ class Primitives3DLayout(object):
         list
             List of geometries from EDB. If EDB is not present, ``None`` is returned.
 
-           """
+        """
+
         try:
             prims = self.modeler.edb.core_primitives.primitives
         except:
             prims = []
         for el in prims:
 
-            if _ironpython:
+            if is_ironpython:
                 name = clr.Reference[System.String]()
-                response = el.GetProductProperty(0, 1, name)
+                try:
+                    response = el.GetProductProperty(0, 1, name)
+                except:
+                    response, name = False, ""
+
             else:
                 val = String("")
-                response, name = el.GetProductProperty(0, 1, val)
-            elval = el.GetType()
-            elid = el.GetId()
-            if not name:
-                if "Rectangle" in elval.ToString():
-                    name = "rect_" + str(elid)
-                elif "Circle" in elval.ToString():
-                    name = "circle_" + str(elid)
-                elif "Polygon" in elval.ToString():
-                    name = "poly_" + str(elid)
-                elif "Path" in elval.ToString():
-                    name = "line_" + str(elid)
-                elif "Bondwire" in elval.ToString():
-                    name = "bondwire_" + str(elid)
-                else:
-                    continue
-            self._geometries[name] = Geometries3DLayout(self, name,  elid)
+                try:
+                    response, name = el.GetProductProperty(0, 1, val)
+                except:
+                    response, name = False, ""
+            if str(name):
+                elval = el.GetType()
+                elid = el.GetId()
+                name = str(name).replace("'", "")
+                el_str = elval.ToString()
+                if not name:
+                    if "Rectangle" in el_str:
+                        name = "rect_" + str(elid)
+                    elif "Circle" in el_str:
+                        name = "circle_" + str(elid)
+                    elif "Polygon" in el_str:
+                        name = "poly_" + str(elid)
+                    elif "Path" in el_str:
+                        name = "line_" + str(elid)
+                    elif "Bondwire" in el_str:
+                        name = "bondwire_" + str(elid)
+                    else:
+                        continue
+                self._geometries[name] = Geometries3DLayout(self, name, elid)
         return self._geometries
 
     @property
@@ -131,14 +164,21 @@ class Primitives3DLayout(object):
         except:
             pins_objs = []
         for el in pins_objs:
-            if _ironpython:
+            if is_ironpython:
                 name = clr.Reference[System.String]()
-                response = el.GetProductProperty(0, 11, name)
+                try:
+                    response = el.GetProductProperty(0, 11, name)
+                except:
+                    name = ""
             else:
                 val = String("")
-                response, name = el.GetProductProperty(0, 11, val)
-            name = str(name).strip("'")
-            self._pins[name] = Pins3DLayout(self, el.GetComponent().GetName(), el.GetName(), name)
+                try:
+                    response, name = el.GetProductProperty(0, 11, val)
+                except:
+                    name = ""
+            if str(name):
+                name = str(name).strip("'")
+                self._pins[name] = Pins3DLayout(self, el.GetComponent().GetName(), el.GetName(), name)
         return self._pins
 
     @property
@@ -169,12 +209,12 @@ class Primitives3DLayout(object):
             List of default materials.
 
         """
-        return default_materials[self._parent._design_type]
+        return default_materials[self._app._design_type]
 
     @property
-    def _messenger(self):
-        """Messenger."""
-        return self._parent._messenger
+    def logger(self):
+        """Logger."""
+        return self._app.logger
 
     @property
     def version(self):
@@ -186,22 +226,12 @@ class Primitives3DLayout(object):
             Version of AEDT.
 
         """
-        return self._parent._aedt_version
+        return self._app._aedt_version
 
     @property
     def modeler(self):
         """Modeler."""
         return self._modeler
-
-    @property
-    def oeditor(self):
-        """Editor."""
-        return self.modeler.oeditor
-
-    @property
-    def opadstackmanager(self):
-        """Padstack manager."""
-        return retry_ntimes(10, self._parent._oproject.GetDefinitionManager().GetManager, "Padstack")
 
     @property
     def model_units(self):
@@ -252,7 +282,7 @@ class Primitives3DLayout(object):
             props = []
             for p in props_all:
                 try:
-                    if p[0] == 'NAME:psd':
+                    if p[0] == "NAME:psd":
                         props = p
                 except:
                     pass
@@ -261,7 +291,7 @@ class Primitives3DLayout(object):
             for prop in props:
                 if type(prop) is str:
                     if prop == "mat:=":
-                        self.padstacks[name].mat = props[props.index(prop)+1]
+                        self.padstacks[name].mat = props[props.index(prop) + 1]
                     elif prop == "plt:=":
                         self.padstacks[name].plating = props[props.index(prop) + 1]
                     elif prop == "hRg:=":
@@ -283,23 +313,29 @@ class Primitives3DLayout(object):
                         self.padstacks[name].hole.y = props[props.index(prop) + 1][7]
                         self.padstacks[name].hole.rot = props[props.index(prop) + 1][9]
                 try:
-                    if prop[0] == 'NAME:pds':
-                        layers_num = len(prop)-1
-                        i=1
-                        while i<=layers_num:
+                    if prop[0] == "NAME:pds":
+                        layers_num = len(prop) - 1
+                        i = 1
+                        while i <= layers_num:
                             lay = prop[i]
                             lay_name = lay[2]
                             lay_id = int(lay[4])
-                            if i!= 1:
+                            if i != 1:
                                 self.padstacks[name].add_layer(lay_name)
                             self.padstacks[name].layers[lay_name].layername = lay_name
-                            self.padstacks[name].layers[lay_name].pad = self.padstacks[name].add_hole(lay[6][1],list(lay[6][3]),lay[6][5],lay[6][7],lay[6][9])
-                            self.padstacks[name].layers[lay_name].antipad = self.padstacks[name].add_hole(lay[8][1],list(lay[8][3]),lay[8][5],lay[8][7],lay[8][9])
-                            self.padstacks[name].layers[lay_name].thermal = self.padstacks[name].add_hole(lay[10][1],list(lay[10][3]),lay[10][5],lay[10][7],lay[10][9])
+                            self.padstacks[name].layers[lay_name].pad = self.padstacks[name].add_hole(
+                                lay[6][1], list(lay[6][3]), lay[6][5], lay[6][7], lay[6][9]
+                            )
+                            self.padstacks[name].layers[lay_name].antipad = self.padstacks[name].add_hole(
+                                lay[8][1], list(lay[8][3]), lay[8][5], lay[8][7], lay[8][9]
+                            )
+                            self.padstacks[name].layers[lay_name].thermal = self.padstacks[name].add_hole(
+                                lay[10][1], list(lay[10][3]), lay[10][5], lay[10][7], lay[10][9]
+                            )
                             self.padstacks[name].layers[lay_name].connectionx = lay[12]
                             self.padstacks[name].layers[lay_name].connectiony = lay[14]
                             self.padstacks[name].layers[lay_name].connectiondir = lay[16]
-                            i +=1
+                            i += 1
                         pass
                 except:
                     pass
@@ -323,6 +359,10 @@ class Primitives3DLayout(object):
         bool
             ``True`` when successful, ``False`` when failed.
 
+        References
+        ----------
+
+        >>> oEditor.SetNetVisible
         """
         if not netlist:
             netlist = self.nets
@@ -335,12 +375,22 @@ class Primitives3DLayout(object):
             args.append(net)
             args.append("Vis:=")
             args.append(visible)
-        self.oeditor.SetNetVisible(args)
+        self._oeditor.SetNetVisible(args)
         return True
 
     @aedt_exception_handler
-    def create_via(self, padstack="PlanarEMVia", x=0, y=0, rotation=0, hole_diam=None, top_layer=None, bot_layer=None,
-                   name=None, netname=None):
+    def create_via(
+        self,
+        padstack="PlanarEMVia",
+        x=0,
+        y=0,
+        rotation=0,
+        hole_diam=None,
+        top_layer=None,
+        bot_layer=None,
+        name=None,
+        netname=None,
+    ):
         """Create a via based on an existing padstack.
 
         Parameters
@@ -372,27 +422,31 @@ class Primitives3DLayout(object):
         str
             Name of the via created when successful.
 
+        References
+        ----------
+
+        >>> oEditor.CreateVia
         """
         layers = self.modeler.layers.all_signal_layers
         if not top_layer:
             top_layer = layers[0]
         if not bot_layer:
-            bot_layer = layers[len(layers)-1]
+            bot_layer = layers[len(layers) - 1]
         if not name:
             name = _uname()
         else:
-            listnames = self.oeditor.FindObjects("Name", name)
+            listnames = self._oeditor.FindObjects("Name", name)
             if listnames:
                 name = _uname(name)
         arg = ["NAME:Contents"]
-        arg.append("name:="),  arg.append(name)
-        arg.append("ReferencedPadstack:=")	, arg.append(padstack),
+        arg.append("name:="), arg.append(name)
+        arg.append("ReferencedPadstack:="), arg.append(padstack),
         arg.append("vposition:="),
         arg.append(["x:=", self.arg_with_dim(x), "y:=", self.arg_with_dim(y)])
         arg.append("vrotation:="), arg.append([str(rotation) + "deg"])
         if hole_diam:
             arg.append("overrides hole:="), arg.append(True)
-            arg.append("hole diameter:="), arg.append([self.arg_with_dim("hole_diam")])
+            arg.append("hole diameter:="), arg.append([self.arg_with_dim(hole_diam)])
 
         else:
             arg.append("overrides hole:="), arg.append(False)
@@ -401,7 +455,7 @@ class Primitives3DLayout(object):
         arg.append("Pin:="), arg.append(False)
         arg.append("highest_layer:="), arg.append(top_layer)
         arg.append("lowest_layer:="), arg.append(bot_layer)
-        self.oeditor.CreateVia(arg)
+        self._oeditor.CreateVia(arg)
         # self.objects[name] = Object3dlayout(self)
         # self.objects[name].name = name
         # if netname:
@@ -434,11 +488,15 @@ class Primitives3DLayout(object):
         str
             Name of the circle created when successful.
 
+        References
+        ----------
+
+        >>> oEditor.CreateCircle
         """
         if not name:
             name = _uname()
         else:
-            listnames = self.oeditor.FindObjects("Name", name)
+            listnames = self._oeditor.FindObjects("Name", name)
             if listnames:
                 name = _uname(name)
 
@@ -451,8 +509,8 @@ class Primitives3DLayout(object):
         vArg2.append("y:="), vArg2.append(self.arg_with_dim(y))
         vArg2.append("r:="), vArg2.append(self.arg_with_dim(radius))
         vArg1.append(vArg2)
-        self.oeditor.CreateCircle(vArg1)
-        if self.isoutsideDesktop:
+        self._oeditor.CreateCircle(vArg1)
+        if self.is_outside_desktop:
             self._geometries[name] = Geometries3DLayout(self, name)
             if netname:
                 self._geometries[name].set_net_name(netname)
@@ -485,12 +543,16 @@ class Primitives3DLayout(object):
         str
             Name of the rectangle created when successful.
 
+        References
+        ----------
+
+        >>> oEditor.CreateRectangle
         """
 
         if not name:
             name = _uname()
         else:
-            listnames = self.oeditor.FindObjects("Name", name)
+            listnames = self._oeditor.FindObjects("Name", name)
             if listnames:
                 name = _uname(name)
 
@@ -506,8 +568,8 @@ class Primitives3DLayout(object):
         vArg2.append("cr:="), vArg2.append(self.arg_with_dim(corner_radius))
         vArg2.append("ang="), vArg2.append(self.arg_with_dim(angle))
         vArg1.append(vArg2)
-        self.oeditor.CreateRectangle(vArg1)
-        if self.isoutsideDesktop:
+        self._oeditor.CreateRectangle(vArg1)
+        if self.is_outside_desktop:
             self._geometries[name] = Geometries3DLayout(self, name)
             if netname:
                 self._geometries[name].set_net_name(netname)
@@ -548,24 +610,42 @@ class Primitives3DLayout(object):
         str
             Name of the line created when successful.
 
+        References
+        ----------
+
+        >>> oEditor.CreateLine
         """
         if not name:
             name = _uname()
         else:
-            listnames = self.oeditor.FindObjects("Name", name)
+            listnames = self._oeditor.FindObjects("Name", name)
             if listnames:
                 name = _uname(name)
         arg = ["NAME:Contents", "lineGeometry:="]
-        arg2 = ["Name:=", name, "LayerName:=", layername, "lw:=", self.arg_with_dim(lw), "endstyle:=", end_style,
-                "StartCap:=", start_style, "n:=", len(center_line_list), "U:=", self.model_units]
+        arg2 = [
+            "Name:=",
+            name,
+            "LayerName:=",
+            layername,
+            "lw:=",
+            self.arg_with_dim(lw),
+            "endstyle:=",
+            end_style,
+            "StartCap:=",
+            start_style,
+            "n:=",
+            len(center_line_list),
+            "U:=",
+            self.model_units,
+        ]
         for a in center_line_list:
             arg2.append("x:=")
             arg2.append(a[0])
             arg2.append("y:=")
             arg2.append(a[1])
         arg.append(arg2)
-        self.oeditor.CreateLine(arg)
-        if self.isoutsideDesktop:
+        self._oeditor.CreateLine(arg)
+        if self.is_outside_desktop:
             self._geometries[name] = Geometries3DLayout(self, name)
             if netname:
                 self._geometries[name].set_net_name(netname)

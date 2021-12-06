@@ -1,10 +1,9 @@
-from ..generic.general_methods import aedt_exception_handler, generate_unique_name
-from .Analysis import Analysis
-from .Design import solutions_settings
-from ..modeler.Circuit import ModelerSimplorer
-from ..modules.PostProcessor import PostProcessor
-from ..modules.SetupTemplates import SetupKeys
-from ..modules.SolveSetup import SetupCircuit
+from pyaedt.generic.general_methods import aedt_exception_handler
+from pyaedt.modeler.Circuit import ModelerSimplorer
+from pyaedt.modules.SolveSetup import SetupCircuit
+from pyaedt.application.Analysis import Analysis
+from pyaedt.application.Design import solutions_settings
+from pyaedt.modules.PostProcessor import CircuitPostProcessor
 
 
 class FieldAnalysisSimplorer(Analysis):
@@ -37,32 +36,60 @@ class FieldAnalysisSimplorer(Analysis):
 
     @property
     def existing_analysis_setups(self):
-        """Existing analysis setups."""
+        """Existing analysis setups.
+
+        References
+        ----------
+
+        >>> oModule.GetAllSolutionSetups"""
         setups = self.oanalysis.GetAllSolutionSetups()
         return setups
 
     @property
     def setup_names(self):
-        """Setup names."""
+        """Setup names.
+
+        References
+        ----------
+
+        >>> oModule.GetAllSolutionSetups"""
         return list(self.oanalysis.GetAllSolutionSetups())
 
-    def __init__(self, application, projectname, designname, solution_type, setup_name=None,
-                 specified_version=None, NG=False, AlwaysNew=False, release_on_exit=False, student_version=False):
+    def __init__(
+        self,
+        application,
+        projectname,
+        designname,
+        solution_type,
+        setup_name=None,
+        specified_version=None,
+        non_graphical=False,
+        new_desktop_session=False,
+        close_on_exit=False,
+        student_version=False,
+    ):
+
+        Analysis.__init__(
+            self,
+            application,
+            projectname,
+            designname,
+            solution_type,
+            setup_name,
+            specified_version,
+            non_graphical,
+            new_desktop_session,
+            close_on_exit,
+            student_version,
+        )
         self.solution_type = solution_type
-        Analysis.__init__(self, application, projectname, designname, solution_type, setup_name,
-                          specified_version, NG, AlwaysNew, release_on_exit, student_version)
         self._modeler = ModelerSimplorer(self)
-        self._post = PostProcessor(self)
+        self._post = CircuitPostProcessor(self)
 
     @property
     def modeler(self):
         """Design oModeler."""
         return self._modeler
-
-    @property
-    def oanalysis(self):
-        """Design Module ``"SimSetup"``."""
-        return self.odesign.GetModule("SimSetup")
 
     @aedt_exception_handler
     def create_setup(self, setupname="MySetupAuto", setuptype=None, props={}):
@@ -81,7 +108,6 @@ class FieldAnalysisSimplorer(Analysis):
         -------
         pyaedt.modules.SolveSetup.SetupCircuit
             Setup object
-
         """
         if setuptype is None:
             setuptype = self.solution_type

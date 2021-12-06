@@ -3,65 +3,73 @@ This module contains the `EdbStackup` class.
 
 """
 from __future__ import absolute_import
+
+import math
 import warnings
-from .general import *
+
+from pyaedt.edb_core.EDB_Data import EDBLayers
+from pyaedt.edb_core.general import convert_py_list_to_net_list
+from pyaedt.generic.general_methods import aedt_exception_handler, is_ironpython
 
 try:
     from System import Double
-    from System.Collections.Generic import List
 except ImportError:
     warnings.warn('This module requires the "pythonnet" package.')
 
 
-from .EDB_Data import EDBLayers, EDBLayer
-
-
 class EdbStackup(object):
-    """Manages EDB functionalities for stackups."""
+    """Manages EDB functionalities for stackups.
 
-    def __init__(self, parent):
-        self.parent = parent
+    Examples
+    --------
+    >>> from pyaedt import Edb
+    >>> edbapp = Edb("myaedbfolder", edbversion="2021.2")
+    >>> edb_stackup = edbapp.core_stackup
+    """
+
+    def __init__(self, p_edb):
+        self._pedb = p_edb
         self._layer_dict = None
 
     @property
     def _builder(self):
         """ """
-        return self.parent.builder
+        return self._pedb.builder
 
     @property
     def _edb_value(self):
         """ """
-        return self.parent.edb_value
+        return self._pedb.edb_value
 
     @property
     def _edb(self):
         """ """
-        return self.parent.edb
+        return self._pedb.edb
 
     @property
     def _active_layout(self):
         """ """
-        return self.parent.active_layout
+        return self._pedb.active_layout
 
     @property
     def _cell(self):
         """ """
-        return self.parent.cell
+        return self._pedb.cell
 
     @property
     def _db(self):
         """ """
-        return self.parent.db
+        return self._pedb.db
 
     @property
     def _stackup_methods(self):
         """ """
-        return self.parent.edblib.Layout.StackupMethods
+        return self._pedb.edblib.Layout.StackupMethods
 
     @property
-    def _messenger(self):
+    def _logger(self):
         """ """
-        return self.parent._messenger
+        return self._pedb.logger
 
     @property
     def stackup_layers(self):
@@ -108,7 +116,7 @@ class EdbStackup(object):
             Dictionary of materials.
         """
         mats = {}
-        for el in self.parent.edbutils.MaterialSetupInfo.GetFromLayout(self.parent.active_layout):
+        for el in self._pedb.edbutils.MaterialSetupInfo.GetFromLayout(self._pedb.active_layout):
             mats[el.Name] = el
         return mats
 
@@ -131,10 +139,13 @@ class EdbStackup(object):
             Material definition.
         """
         if self._edb.Definition.MaterialDef.FindByName(self._db, name).IsNull():
-            material_def = self._edb.Definition.MaterialDef.Create(self._db,name)
-            material_def.SetProperty(self._edb.Definition.MaterialPropertyId.Permittivity,
-                                                self._edb_value(permittivity))
-            material_def.SetProperty(self._edb.Definition.MaterialPropertyId.DielectricLossTangent,self._edb_value(loss_tangent))
+            material_def = self._edb.Definition.MaterialDef.Create(self._db, name)
+            material_def.SetProperty(
+                self._edb.Definition.MaterialPropertyId.Permittivity, self._edb_value(permittivity)
+            )
+            material_def.SetProperty(
+                self._edb.Definition.MaterialPropertyId.DielectricLossTangent, self._edb_value(loss_tangent)
+            )
             return material_def
         return False
 
@@ -144,7 +155,7 @@ class EdbStackup(object):
 
         Parameters
         ----------
-        name: str
+        name : str
             Name of the conductor.
         conductivity : float, optional
             Conductivity of the conductor. The default is ``1e6``.
@@ -156,13 +167,23 @@ class EdbStackup(object):
         """
         if self._edb.Definition.MaterialDef.FindByName(self._db, name).IsNull():
             material_def = self._edb.Definition.MaterialDef.Create(self._db, name)
-            material_def.SetProperty(self._edb.Definition.MaterialPropertyId.Conductivity,
-                                     self._edb_value(conductivity))
+            material_def.SetProperty(
+                self._edb.Definition.MaterialPropertyId.Conductivity, self._edb_value(conductivity)
+            )
             return material_def
         return False
 
     @aedt_exception_handler
-    def create_debye_material(self, name, relative_permittivity_low, relative_permittivity_high, loss_tangent_low, loss_tangent_high, lower_freqency, higher_frequency):
+    def create_debye_material(
+        self,
+        name,
+        relative_permittivity_low,
+        relative_permittivity_high,
+        loss_tangent_low,
+        loss_tangent_high,
+        lower_freqency,
+        higher_frequency,
+    ):
         """Create a dielectric with the Debye model.
 
         Parameters
@@ -183,7 +204,7 @@ class EdbStackup(object):
             for ``higher_frequency``.
         lower_freqency : float
             Value for the lower frequency.
-        higher_frequency: float
+        higher_frequency : float
             Value for the higher frequency.
 
         Returns
@@ -194,9 +215,85 @@ class EdbStackup(object):
         material_def = self._edb.Definition.DebyeModel()
         material_def.SetFrequencyRange(lower_freqency, higher_frequency)
         material_def.SetLossTangentAtHighLowFrequency(loss_tangent_low, loss_tangent_high)
-        material_def.SetRelativePermitivityAtHighLowFrequency(self._edb_value(relative_permittivity_low),
-                                                              self._edb_value(relative_permittivity_high))
+        material_def.SetRelativePermitivityAtHighLowFrequency(
+            self._edb_value(relative_permittivity_low), self._edb_value(relative_permittivity_high)
+        )
         return self._add_dielectric_material_model(name, material_def)
+
+    @aedt_exception_handler
+    def flip_stackup_and_apply_transform(self, angle=0.0, offset_x=0.0, offset_y=0.0, mirror=True):
+        """Flip the current layer stackup of a layout. Transform parameters currently not supported.
+
+        Parameters
+        ----------
+        angle : double
+            The rotation angle applied on the design (not supported for the moment).
+        offset_x : double
+            The x offset value (not supported for the moment.
+        offset_y : double
+            The y offset value (not supported for the moment.
+        mirror : bool
+            mirror the flipped design, default value True (not supported for the moment.
+
+        Returns
+        -------
+        bool
+            ``True`` when succeed ``False`` if not.
+        """
+        lc = self._active_layout.GetLayerCollection()
+        new_lc = self._edb.Cell.LayerCollection()
+        max_elevation = 0.0
+        for layer in lc.Layers(self._edb.Cell.LayerTypeSet.StackupLayerSet):
+            if not 'RadBox' in layer.GetName():  # Ignore RadBox
+                lower_elevation = layer.GetLowerElevation() * 1.0e6
+                upper_elevation = layer.GetUpperElevation() * 1.0e6
+                max_elevation = max([max_elevation, lower_elevation, upper_elevation])
+
+        non_stackup_layers = []
+        for layer in lc.Layers(self._edb.Cell.LayerTypeSet.AllLayerSet):
+            cloned_layer = layer.Clone()
+            if not cloned_layer.IsStackupLayer():
+                non_stackup_layers.append(cloned_layer)
+                continue
+
+            if not 'RadBox' in layer.GetName():
+                upper_elevation = layer.GetUpperElevation() * 1.0e6
+                updated_lower_el = max_elevation - upper_elevation
+                val = self._edb_value("{}um".format(updated_lower_el))
+                cloned_layer.SetLowerElevation(val)
+                new_lc.AddStackupLayerAtElevation(cloned_layer)
+
+        layer_list = convert_py_list_to_net_list(non_stackup_layers)
+        new_lc.AddLayers(layer_list)
+        if self._active_layout.SetLayerCollection(new_lc):
+            cell_name = self._active_layout.GetCell().GetName()
+            cell_inst = self._edb.Cell.Hierarchy.CellInstance.FindByName(self._active_layout, cell_name)
+            cell_trans = cell_inst.GetTransform()
+            _angle = self._edb_value(angle * math.pi / 180.0)
+            _offset_x = self._edb_value(offset_x)
+            _offset_y = self._edb_value(offset_y)
+            cell_trans.SetRotationValue(_angle)
+            cell_trans.SetXOffsetValue(_offset_x)
+            cell_trans.SetYOffsetValue(_offset_y)
+            cell_trans.SetMirror(mirror)
+            cmp_list = [cmp for cmp in self._active_layout.Groups if cmp.GetComponent() is not None]
+            for cmp in cmp_list:
+                cmp_type = cmp.GetComponentType()
+                cmp_prop = cmp.GetComponentProperty().Clone()
+                if cmp_type == self._edb.Definition.ComponentType.IC:
+                    die_prop = cmp_prop.GetDieProperty().Clone()
+                    chip_orientation = die_prop.GetOrientation()
+                    if chip_orientation == self._edb.Definition.DieOrientation.ChipDown:
+                        die_prop.SetOrientation(self._edb.Definition.DieOrientation.ChipUp)
+                        cmp_prop.SetDieProperty(die_prop)
+                    else:
+                        die_prop.SetOrientation(self._edb.Definition.DieOrientation.ChipDown)
+                        cmp_prop.SetDieProperty(die_prop)
+                cmp.SetComponentProperty(cmp_prop)
+            return True
+
+        else:
+            return False
 
     @aedt_exception_handler
     def create_djordjevicsarkar_material(self, name, relative_permittivity, loss_tangent, test_frequency):
@@ -247,7 +344,7 @@ class EdbStackup(object):
         bool
             ``True`` when successful, ``False`` when failed.
         """
-        stackup = self._builder.EdbHandler.layout.GetLayerCollection()
+        stackup = self._active_layout.GetLayerCollection()
         if only_metals:
             input_layers = self._edb.Cell.LayerTypeSet.SignalLayerSet
         else:
@@ -257,9 +354,11 @@ class EdbStackup(object):
             res, topl, topz, bottoml, bottomz = stackup.GetTopBottomStackupLayers(input_layers)
         else:
             topl = None
-            topz = Double(0.)
+            topz = Double(0.0)
             bottoml = None
-            bottomz = Double(0.)
-            res, topl, topz, bottoml, bottomz = stackup.GetTopBottomStackupLayers(input_layers, topl, topz, bottoml, bottomz)
+            bottomz = Double(0.0)
+            res, topl, topz, bottoml, bottomz = stackup.GetTopBottomStackupLayers(
+                input_layers, topl, topz, bottoml, bottomz
+            )
         h_stackup = abs(float(topz) - float(bottomz))
         return topl.GetName(), topz, bottoml.GetName(), bottomz

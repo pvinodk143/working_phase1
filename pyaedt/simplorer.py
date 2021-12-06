@@ -1,13 +1,11 @@
 """This module contains the `Simplorer` class."""
 
 from __future__ import absolute_import
+import math
 
-import numbers
-
-from .application.AnalysisSimplorer import FieldAnalysisSimplorer
-from .application.Variables import Variable
-from .desktop import exception_to_desktop
-from .generic.general_methods import aedt_exception_handler, generate_unique_name, is_number
+from pyaedt.application.AnalysisSimplorer import FieldAnalysisSimplorer
+from pyaedt.application.Variables import Variable
+from pyaedt.generic.general_methods import aedt_exception_handler, is_number
 
 
 class Simplorer(FieldAnalysisSimplorer, object):
@@ -38,11 +36,11 @@ class Simplorer(FieldAnalysisSimplorer, object):
     NG : bool, optional
         Whether to launch AEDT in the non-graphical mode. The default
         is ``False``, in which case AEDT is launched in the graphical mode.
-    AlwaysNew : bool, optional
+    new_desktop_session : bool, optional
         Whether to launch an instance of AEDT in a new thread, even if
         another instance of the ``specified_version`` is active on the
         machine.  The default is ``True``.
-    release_on_exit : bool, optional
+    close_on_exit : bool, optional
         Whether to release AEDT on exit. The default is ``True``.
     student_version : bool, optional
         Whether open AEDT Student Version. The default is ``False``.
@@ -73,11 +71,32 @@ class Simplorer(FieldAnalysisSimplorer, object):
     >>> app = Simplorer("myfile.aedt")
     """
 
-    def __init__(self, projectname=None, designname=None, solution_type=None, setup_name=None,
-                 specified_version=None, NG=False, AlwaysNew=False, release_on_exit=False, student_version=False):
+    def __init__(
+        self,
+        projectname=None,
+        designname=None,
+        solution_type=None,
+        setup_name=None,
+        specified_version=None,
+        non_graphical=False,
+        new_desktop_session=False,
+        close_on_exit=False,
+        student_version=False,
+    ):
         """Constructor."""
-        FieldAnalysisSimplorer.__init__(self, "Twin Builder", projectname, designname, solution_type, setup_name,
-                                        specified_version, NG, AlwaysNew, release_on_exit,student_version)
+        FieldAnalysisSimplorer.__init__(
+            self,
+            "Twin Builder",
+            projectname,
+            designname,
+            solution_type,
+            setup_name,
+            specified_version,
+            non_graphical,
+            new_desktop_session,
+            close_on_exit,
+            student_version,
+        )
 
     @aedt_exception_handler
     def create_schematic_from_netlist(self, file_to_import):
@@ -107,45 +126,49 @@ class Simplorer(FieldAnalysisSimplorer, object):
         ypos = 0
         delta = 0.0508
         use_instance = True
-        with open(file_to_import, 'r') as f:
+        with open(file_to_import, "r") as f:
             for line in f:
                 mycomp = None
                 fields = line.split(" ")
                 name = fields[0]
                 if fields[0][0] == "R":
-                    value = fields[3][fields[3].find("=") + 1:].strip()
-                    mycomp, mycompname = self.modeler.components.create_resistor(name, value, xpos, ypos,
-                                                                                 use_instance_id_netlist=use_instance)
+                    value = fields[3][fields[3].find("=") + 1 :].strip()
+                    mycomp = self.modeler.schematic.create_resistor(
+                        name, value, [xpos, ypos], use_instance_id_netlist=use_instance
+                    )
                 elif fields[0][0] == "L":
-                    value = fields[3][fields[3].find("=") + 1:].strip()
-                    mycomp, mycompname = self.modeler.components.create_inductor(name, value, xpos, ypos,
-                                                                                 use_instance_id_netlist=use_instance)
+                    value = fields[3][fields[3].find("=") + 1 :].strip()
+                    mycomp = self.modeler.schematic.create_inductor(
+                        name, value, [xpos, ypos], use_instance_id_netlist=use_instance
+                    )
                 elif fields[0][0] == "C":
-                    value = fields[3][fields[3].find("=") + 1:].strip()
-                    mycomp, mycompname = self.modeler.components.create_capacitor(name, value, xpos, ypos,
-                                                                                  use_instance_id_netlist=use_instance)
+                    value = fields[3][fields[3].find("=") + 1 :].strip()
+                    mycomp = self.modeler.schematic.create_capacitor(
+                        name, value, [xpos, ypos], use_instance_id_netlist=use_instance
+                    )
                 elif fields[0][0] == "Q":
                     if len(fields) == 4 and fields[0][0] == "Q":
                         value = fields[3].strip()
-                        mycomp, mycompname = self.modeler.components.create_npn(fields[0], value, xpos, ypos,
-                                                                               use_instance_id_netlist=use_instance)
+                        mycomp = self.modeler.schematic.create_npn(
+                            fields[0], value, [xpos, ypos], use_instance_id_netlist=use_instance
+                        )
                         value = None
                 elif fields[0][0] == "D":
-                    value = fields[3][fields[3].find("=") + 1:].strip()
-                    mycomp, mycompname = self.modeler.components.create_diode(name, value, xpos, ypos,
-                                                                              use_instance_id_netlist=use_instance)
+                    value = fields[3][fields[3].find("=") + 1 :].strip()
+                    mycomp = self.modeler.schematic.create_diode(
+                        name, value, [xpos, ypos], use_instance_id_netlist=use_instance
+                    )
                 if mycomp:
-                    pins = self.modeler.components.get_pins(mycomp)
                     id = 1
-                    for pin in pins:
-                        if pin == "CH" or pin==fields[0][0]:
+                    for pin in mycomp.pins:
+                        if pin.name == "CH" or pin.name == fields[0][0]:
                             continue
-                        pos = self.modeler.components.get_pin_location(mycomp, pin)
+                        pos = pin.location
                         if pos[0] < xpos:
-                            angle = 6.28318530717959
+                            angle = 0.0
                         else:
-                            angle = 3.14159265358979
-                        self.modeler.components.create_page_port(fields[id], pos[0], pos[1], angle)
+                            angle = math.pi
+                        self.modeler.schematic.create_page_port(fields[id], [pos[0], pos[1]], angle)
                         id += 1
                     ypos += delta
                     if ypos > 0.254:
@@ -164,9 +187,14 @@ class Simplorer(FieldAnalysisSimplorer, object):
 
         Returns
         -------
+        bool
 
+        References
+        ----------
+
+        >>> oDesign.ChangeProperty
         """
-        self.set_sim_setup_parameter('Tend', expression)
+        self.set_sim_setup_parameter("Tend", expression)
         return True
 
     @aedt_exception_handler
@@ -183,8 +211,12 @@ class Simplorer(FieldAnalysisSimplorer, object):
         bool
             ``True`` when successful, ``False`` when failed.
 
+        References
+        ----------
+
+        >>> oDesign.ChangeProperty
         """
-        self.set_sim_setup_parameter('Hmin', expression)
+        self.set_sim_setup_parameter("Hmin", expression)
         return True
 
     @aedt_exception_handler
@@ -201,8 +233,12 @@ class Simplorer(FieldAnalysisSimplorer, object):
         bool
             ``True`` when successful, ``False`` when failed.
 
+        References
+        ----------
+
+        >>> oDesign.ChangeProperty
         """
-        self.set_sim_setup_parameter('Hmax', expression)
+        self.set_sim_setup_parameter("Hmax", expression)
         return True
 
     @aedt_exception_handler
@@ -223,6 +259,10 @@ class Simplorer(FieldAnalysisSimplorer, object):
         bool
             ``True`` when successful, ``False`` when failed.
 
+        References
+        ----------
+
+        >>> oDesign.ChangeProperty
         """
         if isinstance(expression, Variable):
             value_str = expression.string_value
@@ -237,25 +277,12 @@ class Simplorer(FieldAnalysisSimplorer, object):
                 "NAME:AllTabs",
                 [
                     "NAME:BaseElementTab",
-                    [
-                        "NAME:PropServers",
-                        analysis_name
-                    ],
-                    [
-                        "NAME:ChangedProps",
-                        [
-                            "NAME:" + var_str,
-                            "Value:="	, value_str
-                        ]
-                    ]
-                ]
-            ])
+                    ["NAME:PropServers", analysis_name],
+                    ["NAME:ChangedProps", ["NAME:" + var_str, "Value:=", value_str]],
+                ],
+            ]
+        )
         return True
 
     def __enter__(self):
         return self
-
-    def __exit__(self, ex_type, ex_value, ex_traceback):
-        """ Push exit up to parent object Design """
-        if ex_type:
-            exception_to_desktop(self, ex_value, ex_traceback)

@@ -1,41 +1,57 @@
 import math
 
-from ..generic.general_methods import aedt_exception_handler
-from .Modeler import Modeler, GeometryModeler
-from .Primitives2D import Primitives2D
+from pyaedt.generic.general_methods import aedt_exception_handler
+from pyaedt.modeler.Modeler import Modeler, GeometryModeler
+from pyaedt.modeler.Primitives2D import Primitives2D
 
 
 class ModelerRMxprt(Modeler):
-    """Provides the Modeler RMxprt application interface."""
+    """Provides the Modeler RMxprt application interface.
 
-    def __init__(self, parent):
-        Modeler.__init__(self, parent)
+    This class is inherited in the caller application and is accessible through the modeler variable
+    object( eg. ``rmxprt.modeler``).
+
+    """
+
+    def __init__(self, app):
+        Modeler.__init__(self, app)
+        self._oeditor = self._odesign.SetActiveEditor("Machine")
 
     @property
     def oeditor(self):
-        """Editor."""
-        return self.odesign.SetActiveEditor("Machine")
+        """oEditor Module.
+
+        References
+        ----------
+
+        >>> oEditor = oDesign.SetActiveEditor("Machine")"""
+        return self._oeditor
 
 
 class Modeler2D(GeometryModeler):
     """Provides the Modeler 2D application interface.
 
+    This class is inherited in the caller application and is accessible through the modeler variable
+    object( eg. ``maxwell2d.modeler``).
+
     Parameters
     ----------
-    application :
+    application : :class:`pyaedt.application.Analysis2D.FieldAnalysis2D`
 
-    is3d : bool, optional
-        Whether the model is 3D. The default is ``False``.
-
+    Examples
+    --------
+    >>> from pyaedt import Maxwell2d
+    >>> app = Maxwell2d()
+    >>> my_modeler = app.modeler
     """
 
     def __init__(self, application):
         GeometryModeler.__init__(self, application, is3d=False)
-        self._primitives = Primitives2D(self._parent, self)
-        self._primitivesDes = self._parent.project_name + self._parent.design_name
+        self._primitives = Primitives2D(self)
+        self._primitivesDes = self._app.project_name + self._app.design_name
 
     def __get__(self, instance, owner):
-        self._parent = instance
+        self._app = instance
         return self
 
     @property
@@ -44,12 +60,12 @@ class Modeler2D(GeometryModeler):
 
         Returns
         -------
-        :class: `pyaedt.modeler.Primitives2D.Primitives2D`
+        :class:`pyaedt.modeler.Primitives2D.Primitives2D`
 
         """
-        if self._primitivesDes != self._parent.project_name + self._parent.design_name:
+        if self._primitivesDes != self._app.project_name + self._app.design_name:
             self._primitives.refresh()
-            self._primitivesDes = self._parent.project_name + self._parent.design_name
+            self._primitivesDes = self._app.project_name + self._app.design_name
         return self._primitives
 
     @aedt_exception_handler
@@ -107,47 +123,53 @@ class Modeler2D(GeometryModeler):
         -------
         bool
             ``True`` when successful, ``False`` when failed.
-
         """
         self.oeditor.CreateCircle(
             [
                 "NAME:CircleParameters",
-                "IsCovered:=", True,
-                "XCenter:=", "0mm",
-                "YCenter:=", "0mm",
-                "ZCenter:=", "0mm",
-                "Radius:=", radius,
-                "WhichAxis:=", "Z",
-                "NumSegments:=", "0"
+                "IsCovered:=",
+                True,
+                "XCenter:=",
+                "0mm",
+                "YCenter:=",
+                "0mm",
+                "ZCenter:=",
+                "0mm",
+                "Radius:=",
+                radius,
+                "WhichAxis:=",
+                "Z",
+                "NumSegments:=",
+                "0",
             ],
             [
                 "NAME:Attributes",
-                "Name:=", name + "_split",
-                "Flags:=", "",
-                "Color:=", "(132 132 193)",
-                "Transparency:=", 0,
-                "PartCoordinateSystem:=", "Global",
-                "UDMId:=", "",
-                "Materiaobjidue:=", "\"vacuum\"",
-                "SolveInside:=", True
-            ])
+                "Name:=",
+                name + "_split",
+                "Flags:=",
+                "",
+                "Color:=",
+                "(132 132 193)",
+                "Transparency:=",
+                0,
+                "PartCoordinateSystem:=",
+                "Global",
+                "UDMId:=",
+                "",
+                "Materiaobjidue:=",
+                '"vacuum"',
+                "SolveInside:=",
+                True,
+            ],
+        )
 
-        self.oeditor.Copy(
-            [
-                "NAME:Selections",
-                "Selections:=", name
-            ])
+        self.oeditor.Copy(["NAME:Selections", "Selections:=", name])
 
         self.oeditor.Paste()
         self.oeditor.Intersect(
-            [
-                "NAME:Selections",
-                "Selections:=", "{0}1,{0}_split".format(name)
-            ],
-            [
-                "NAME:IntersectParameters",
-                "KeepOriginals:=", False
-            ])
+            ["NAME:Selections", "Selections:=", "{0}1,{0}_split".format(name)],
+            ["NAME:IntersectParameters", "KeepOriginals:=", False],
+        )
 
         self.subtract(name, name + "1")
         return True

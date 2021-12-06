@@ -4,8 +4,8 @@ This module contains these classes: `Layer` and `Layers`.
 This module provides all layer stackup functionalities for the Circuit and HFSS 3D Layout tools.
 """
 from __future__ import absolute_import
-from collections import defaultdict
-from ..generic.general_methods import aedt_exception_handler
+
+from pyaedt.generic.general_methods import aedt_exception_handler
 
 
 @aedt_exception_handler
@@ -82,46 +82,24 @@ class Layer(object):
 
     Parameters
     ----------
-    editor :
+    app : :class:`pyaedt.modules.LayerStackup.Layers`
 
     layertype : string, optional
         The default is ``"signal"``.
-    layerunits : str, optional
-        The default is ``"mm"``.
-    roughunit: str, optional
-        The default is ``"um"``.
-    negative: bool, optional
+    negative : bool, optional
         Whether the geometry on the layer is cut away
         from the layer. The default is ``False``.
+
+    Examples
+    --------
+    >>>from pyaedt import Hfss3dLayout
+    >>>app = Hfss3dLayout()
+    >>>layers = app.modeler.primitives.layers["Top"]
     """
-
-    @property
-    def visflag(self):
-        """Visibility flag for objects on the layer."""
-        visflag = 0
-        if not self.IsVisible:
-            visflag = 0
-        else:
-            if self.IsMeshBackgroundMaterial:
-                visflag += 64
-            if self.IsMeshOverlay:
-                visflag += 32
-            if self.IsVisibleShape:
-                visflag += 1
-            if self.IsVisiblePath:
-                visflag += 2
-            if self.IsVisiblePad:
-                visflag += 4
-            if self.IsVisibleHole:
-                visflag += 8
-            if self.IsVisibleComponent:
-                visflag += 16
-        return visflag
-
-    def __init__(self, editor, layertype="signal", layerunits="mm", roughunit="um", negative=False):
-        self.LengthUnit = layerunits
-        self.LengthUnitRough = roughunit
-        self.oeditor = editor
+    def __init__(self, app, layertype="signal", negative=False):
+        self.LengthUnit = app.LengthUnit
+        self.LengthUnitRough = app.LengthUnit
+        self._layers = app
         self.name = None
         self.type = layertype
         self.id = 0
@@ -165,8 +143,35 @@ class Layer(object):
         self.SHRatio = 2.9
         # Solver option
         self.usp = False
-        self.hfssSp = {"si": True, "dt": 0, 'dtv': 0.1}
+        self.hfssSp = {"si": True, "dt": 0, "dtv": 0.1}
         self.planaremSp = {"ifg": False, "vly": False}
+
+    @property
+    def _oeditor(self):
+        return self._layers._oeditor
+
+    @property
+    def visflag(self):
+        """Visibility flag for objects on the layer."""
+        visflag = 0
+        if not self.IsVisible:
+            visflag = 0
+        else:
+            if self.IsMeshBackgroundMaterial:
+                visflag += 64
+            if self.IsMeshOverlay:
+                visflag += 32
+            if self.IsVisibleShape:
+                visflag += 1
+            if self.IsVisiblePath:
+                visflag += 2
+            if self.IsVisiblePad:
+                visflag += 4
+            if self.IsVisibleHole:
+                visflag += 8
+            if self.IsVisibleComponent:
+                visflag += 16
+        return visflag
 
     @aedt_exception_handler
     def set_layer_color(self, r, g, b):
@@ -186,6 +191,10 @@ class Layer(object):
         bool
             ``True`` when successful, ``False`` when failed.
 
+        References
+        ----------
+
+        >>> oEditor.ChangeLayer
         """
         rgb = [r, g, b]
         self.color = _getIfromRGB(rgb)
@@ -200,80 +209,146 @@ class Layer(object):
         -------
         bool
             ``True`` when successful, ``False`` when failed.
+
+        References
+        ----------
+
+        >>> oEditor.AddStackupLayer
         """
         self.remove_stackup_layer()
         if self.type == "signal":
-            self.oeditor.AddStackupLayer([
-                "NAME:stackup layer",
-                "Name:=", self.name,
-                "Type:=", self.type,
-                "Top Bottom:=", self.topbottom,
-                "Color:=", self.color,
-                "Transparency:=", self.transparency,
-                "Pattern:=", self.pattern,
-                "VisFlag:=", self.visflag,
-                "Locked:=", self.locked,
-                "DrawOverride:=", self.drawoverride,
+            self._oeditor.AddStackupLayer(
                 [
-                    "NAME:Sublayer",
-                    "Thickness:=", self.thickness,
-                    "LowerElevation:=", self.lowerelevation,
-                    "Roughness:=", self._arg_with_dim(self.roughness, self.LengthUnitRough),
-                    "BotRoughness:=", self._arg_with_dim(self.botroughness, self.LengthUnitRough),
-                    "SideRoughness:=", self._arg_with_dim(self.toprounghenss, self.LengthUnitRough),
-                    "Material:=", self._arg_with_dim(self.material),
-                    "FillMaterial:=", self._arg_with_dim(self.fillmaterial)
-                ],
-                "Neg:=", self.IsNegative,
-                "Usp:=", self.usp,
-                [
-                    "NAME:Sp",
-                    "Sn:=", "HFSS",
-                    "Sv:=", "so(si=" + str(self.hfssSp["si"]).lower() + " , dt=" + str(self.hfssSp["dt"]) +
-                            ", dtv=\'" + self._arg_with_dim(self.hfssSp["dtv"]) + "\')"
-                ],
-                [
-                    "NAME:Sp",
-                    "Sn:=", "PlanarEM",
-                    "Sv:=", "so(ifg=" + str(self.planaremSp["ifg"]).lower() +
-                            ", vly=" + str(self.planaremSp["vly"]).lower() + ")"
-                ],
-                "Etch:=", str(self.etch),
-                "UseEtch:=", self.useetch,
-                "UseR:=", self.user,
-                "RMdl:=", self.RMdl,
-                "NR:=", self._arg_with_dim(self.NR, self.LengthUnitRough),
-                "HRatio:=", str(self.HRatio),
-                "BRMdl:=", self.BRMdl,
-                "BNR:=", self._arg_with_dim(self.BNR, self.LengthUnitRough),
-                "BHRatio:=", str(self.BHRatio),
-                "SRMdl:=", self.SRMdl,
-                "SNR:=", self._arg_with_dim(self.SNR, self.LengthUnitRough),
-                "SHRatio:=", str(self.SHRatio)
-            ])
-        else:
-            self.oeditor.AddStackupLayer([
-                "NAME:stackup layer",
-                "Name:=", self.name,
-                "Type:=", self.type,
-                "Top Bottom:=", self.topbottom,
-                "Color:=", self.color,
-                "Transparency:=", self.transparency,
-                "Pattern:=", self.pattern,
-                "VisFlag:=", self.visflag,
-                "Locked:=", self.locked,
-                "DrawOverride:=", self.drawoverride,
-                [
-                    "NAME:Sublayer",
-                    "Thickness:=", self.thickness,
-                    "LowerElevation:=", self.lowerelevation,
-                    "Roughness:=", 0,
-                    "BotRoughness:=", 0,
-                    "SideRoughness:=", 0,
-                    "Material:=", self._arg_with_dim(self.material),
+                    "NAME:stackup layer",
+                    "Name:=",
+                    self.name,
+                    "Type:=",
+                    self.type,
+                    "Top Bottom:=",
+                    self.topbottom,
+                    "Color:=",
+                    self.color,
+                    "Transparency:=",
+                    self.transparency,
+                    "Pattern:=",
+                    self.pattern,
+                    "VisFlag:=",
+                    self.visflag,
+                    "Locked:=",
+                    self.locked,
+                    "DrawOverride:=",
+                    self.drawoverride,
+                    [
+                        "NAME:Sublayer",
+                        "Thickness:=",
+                        self.thickness,
+                        "LowerElevation:=",
+                        self.lowerelevation,
+                        "Roughness:=",
+                        self._arg_with_dim(self.roughness, self.LengthUnitRough),
+                        "BotRoughness:=",
+                        self._arg_with_dim(self.botroughness, self.LengthUnitRough),
+                        "SideRoughness:=",
+                        self._arg_with_dim(self.toprounghenss, self.LengthUnitRough),
+                        "Material:=",
+                        self.material.lower(),
+                        "FillMaterial:=",
+                        self.fillmaterial.lower(),
+                    ],
+                    "Neg:=",
+                    self.IsNegative,
+                    "Usp:=",
+                    self.usp,
+                    [
+                        "NAME:Sp",
+                        "Sn:=",
+                        "HFSS",
+                        "Sv:=",
+                        "so(si="
+                        + str(self.hfssSp["si"]).lower()
+                        + " , dt="
+                        + str(self.hfssSp["dt"])
+                        + ", dtv='"
+                        + self._arg_with_dim(self.hfssSp["dtv"])
+                        + "')",
+                    ],
+                    [
+                        "NAME:Sp",
+                        "Sn:=",
+                        "PlanarEM",
+                        "Sv:=",
+                        "so(ifg="
+                        + str(self.planaremSp["ifg"]).lower()
+                        + ", vly="
+                        + str(self.planaremSp["vly"]).lower()
+                        + ")",
+                    ],
+                    "Etch:=",
+                    str(self.etch),
+                    "UseEtch:=",
+                    self.useetch,
+                    "UseR:=",
+                    self.user,
+                    "RMdl:=",
+                    self.RMdl,
+                    "NR:=",
+                    self._arg_with_dim(self.NR, self.LengthUnitRough),
+                    "HRatio:=",
+                    str(self.HRatio),
+                    "BRMdl:=",
+                    self.BRMdl,
+                    "BNR:=",
+                    self._arg_with_dim(self.BNR, self.LengthUnitRough),
+                    "BHRatio:=",
+                    str(self.BHRatio),
+                    "SRMdl:=",
+                    self.SRMdl,
+                    "SNR:=",
+                    self._arg_with_dim(self.SNR, self.LengthUnitRough),
+                    "SHRatio:=",
+                    str(self.SHRatio),
                 ]
-            ])
-        infos = self.oeditor.GetLayerInfo(self.name)
+            )
+        else:
+            self._oeditor.AddStackupLayer(
+                [
+                    "NAME:stackup layer",
+                    "Name:=",
+                    self.name,
+                    "Type:=",
+                    self.type,
+                    "Top Bottom:=",
+                    self.topbottom,
+                    "Color:=",
+                    self.color,
+                    "Transparency:=",
+                    self.transparency,
+                    "Pattern:=",
+                    self.pattern,
+                    "VisFlag:=",
+                    self.visflag,
+                    "Locked:=",
+                    self.locked,
+                    "DrawOverride:=",
+                    self.drawoverride,
+                    [
+                        "NAME:Sublayer",
+                        "Thickness:=",
+                        self.thickness,
+                        "LowerElevation:=",
+                        self.lowerelevation,
+                        "Roughness:=",
+                        0,
+                        "BotRoughness:=",
+                        0,
+                        "SideRoughness:=",
+                        0,
+                        "Material:=",
+                        self.material.lower(),
+                    ],
+                ]
+            )
+        infos = self._oeditor.GetLayerInfo(self.name)
         infos = [i.split(": ") for i in infos]
         infosdict = {i[0]: i[1] for i in infos}
         self.id = int(infosdict["LayerId"])
@@ -294,7 +369,7 @@ class Layer(object):
         -------
 
         """
-        if type(value) is str:
+        if isinstance(value, str):
             val = value
         else:
             if units is None:
@@ -315,82 +390,152 @@ class Layer(object):
         -------
         bool
             ``True`` when successful, ``False`` when failed.
+
+        References
+        ----------
+
+        >>> oEditor.ChangeLayer
         """
         if self.type == "signal":
-            self.oeditor.ChangeLayer([
-                "NAME:SLayer",
-                "Name:=", self.name,
-                "ID:=", self.id,
-                "Type:=", self.type,
-                "Top Bottom:=", self.topbottom,
-                "Color:=", self.color,
-                "Transparency:=", self.transparency,
-                "Pattern:=", self.pattern,
-                "VisFlag:=", self.visflag,
-                "Locked:=", self.locked,
-                "DrawOverride:=", self.drawoverride,
-                "Zones:="	, [0],
+            self._oeditor.ChangeLayer(
                 [
-                    "NAME:Sublayer",
-                    "Thickness:=", self.thickness,
-                    "LowerElevation:=", self.lowerelevation,
-                    "Roughness:=", self._arg_with_dim(self.roughness, self.LengthUnitRough),
-                    "BotRoughness:=", self._arg_with_dim(self.botroughness, self.LengthUnitRough),
-                    "SideRoughness:=", self._arg_with_dim(self.toprounghenss, self.LengthUnitRough),
-                    "Material:=", self.material,
-                    "FillMaterial:=", self.fillmaterial
-                ],
-                "Neg:=", self.IsNegative,
-                "Usp:=", self.usp,
-                [
-                    "NAME:Sp",
-                    "Sn:=", "HFSS",
-                    "Sv:=", "so(si=" + str(self.hfssSp["si"]).lower() + " , dt=" + str(self.hfssSp["dt"]) +
-                            ", dtv=\'" + self._arg_with_dim(self.hfssSp["dtv"]) + "\')"
-                ],
-                [
-                    "NAME:Sp",
-                    "Sn:=", "PlanarEM",
-                    "Sv:=", "so(ifg=" + str(self.planaremSp["ifg"]).lower() +
-                            ", vly=" + str(self.planaremSp["vly"]).lower() + ")"
-                ],
-                "Etch:=", str(self.etch),
-                "UseEtch:=", self.useetch,
-                "UseR:=", self.user,
-                "RMdl:=", self.RMdl,
-                "NR:=", self._arg_with_dim(self.NR, self.LengthUnitRough),
-                "HRatio:=", str(self.HRatio),
-                "BRMdl:=", self.BRMdl,
-                "BNR:=", self._arg_with_dim(self.BNR, self.LengthUnitRough),
-                "BHRatio:=", str(self.BHRatio),
-                "SRMdl:=", self.SRMdl,
-                "SNR:=", self._arg_with_dim(self.SNR, self.LengthUnitRough),
-                "SHRatio:=", str(self.SHRatio)
-            ])
-        elif self.type == "dielectric":
-            self.oeditor.ChangeLayer([
-                "NAME:SLayer",
-                "Name:=", self.name,
-                "ID:=", self.id,
-                "Type:=", self.type,
-                "Top Bottom:=", self.topbottom,
-                "Color:=", self.color,
-                "Transparency:=", self.transparency,
-                "Pattern:=", self.pattern,
-                "VisFlag:=", self.visflag,
-                "Locked:=", self.locked,
-                "DrawOverride:=", self.drawoverride,
-                "Zones:=", [],
-                [
-                    "NAME:Sublayer",
-                    "Thickness:=", self.thickness,
-                    "LowerElevation:=", self.lowerelevation,
-                    "Roughness:=", 0,
-                    "BotRoughness:=", 0,
-                    "SideRoughness:=", 0,
-                    "Material:=", self.material,
+                    "NAME:SLayer",
+                    "Name:=",
+                    self.name,
+                    "ID:=",
+                    self.id,
+                    "Type:=",
+                    self.type,
+                    "Top Bottom:=",
+                    self.topbottom,
+                    "Color:=",
+                    self.color,
+                    "Transparency:=",
+                    self.transparency,
+                    "Pattern:=",
+                    self.pattern,
+                    "VisFlag:=",
+                    self.visflag,
+                    "Locked:=",
+                    self.locked,
+                    "DrawOverride:=",
+                    self.drawoverride,
+                    "Zones:=",
+                    [0],
+                    [
+                        "NAME:Sublayer",
+                        "Thickness:=",
+                        self.thickness,
+                        "LowerElevation:=",
+                        self.lowerelevation,
+                        "Roughness:=",
+                        self._arg_with_dim(self.roughness, self.LengthUnitRough),
+                        "BotRoughness:=",
+                        self._arg_with_dim(self.botroughness, self.LengthUnitRough),
+                        "SideRoughness:=",
+                        self._arg_with_dim(self.toprounghenss, self.LengthUnitRough),
+                        "Material:=",
+                        self.material.lower(),
+                        "FillMaterial:=",
+                        self.fillmaterial.lower(),
+                    ],
+                    "Neg:=",
+                    self.IsNegative,
+                    "Usp:=",
+                    self.usp,
+                    [
+                        "NAME:Sp",
+                        "Sn:=",
+                        "HFSS",
+                        "Sv:=",
+                        "so(si="
+                        + str(self.hfssSp["si"]).lower()
+                        + " , dt="
+                        + str(self.hfssSp["dt"])
+                        + ", dtv='"
+                        + self._arg_with_dim(self.hfssSp["dtv"])
+                        + "')",
+                    ],
+                    [
+                        "NAME:Sp",
+                        "Sn:=",
+                        "PlanarEM",
+                        "Sv:=",
+                        "so(ifg="
+                        + str(self.planaremSp["ifg"]).lower()
+                        + ", vly="
+                        + str(self.planaremSp["vly"]).lower()
+                        + ")",
+                    ],
+                    "Etch:=",
+                    str(self.etch),
+                    "UseEtch:=",
+                    self.useetch,
+                    "UseR:=",
+                    self.user,
+                    "RMdl:=",
+                    self.RMdl,
+                    "NR:=",
+                    self._arg_with_dim(self.NR, self.LengthUnitRough),
+                    "HRatio:=",
+                    str(self.HRatio),
+                    "BRMdl:=",
+                    self.BRMdl,
+                    "BNR:=",
+                    self._arg_with_dim(self.BNR, self.LengthUnitRough),
+                    "BHRatio:=",
+                    str(self.BHRatio),
+                    "SRMdl:=",
+                    self.SRMdl,
+                    "SNR:=",
+                    self._arg_with_dim(self.SNR, self.LengthUnitRough),
+                    "SHRatio:=",
+                    str(self.SHRatio),
                 ]
-            ])
+            )
+        elif self.type == "dielectric":
+            self._oeditor.ChangeLayer(
+                [
+                    "NAME:SLayer",
+                    "Name:=",
+                    self.name,
+                    "ID:=",
+                    self.id,
+                    "Type:=",
+                    self.type,
+                    "Top Bottom:=",
+                    self.topbottom,
+                    "Color:=",
+                    self.color,
+                    "Transparency:=",
+                    self.transparency,
+                    "Pattern:=",
+                    self.pattern,
+                    "VisFlag:=",
+                    self.visflag,
+                    "Locked:=",
+                    self.locked,
+                    "DrawOverride:=",
+                    self.drawoverride,
+                    "Zones:=",
+                    [],
+                    [
+                        "NAME:Sublayer",
+                        "Thickness:=",
+                        self.thickness,
+                        "LowerElevation:=",
+                        self.lowerelevation,
+                        "Roughness:=",
+                        0,
+                        "BotRoughness:=",
+                        0,
+                        "SideRoughness:=",
+                        0,
+                        "Material:=",
+                        self.material.lower(),
+                    ],
+                ]
+            )
         else:
             return False
         return True
@@ -403,9 +548,14 @@ class Layer(object):
         -------
         bool
             ``True`` when successful, ``False`` when failed.
+
+        References
+        ----------
+
+        >>> oEditor.RemoveLayer
         """
-        if self.name in self.oeditor.GetStackupLayerNames():
-            self.oeditor.RemoveLayer(self.name)
+        if self.name in self._oeditor.GetStackupLayerNames():
+            self._oeditor.RemoveLayer(self.name)
             return True
         return False
 
@@ -415,35 +565,39 @@ class Layers(object):
 
     Parameters
     ----------
-    parent :
-        Inherited AEDT object.
-
-    modeler :
+    modeler : :class:`pyaedt.modeler.Model3DLayout.Modeler3DLayout`
 
     roughnessunits : str, optional
        Units for the roughness of layers. The default is ``"um"``.
 
+    Examples
+    --------
+    >>>from pyaedt import Hfss3dLayout
+    >>>app = Hfss3dLayout()
+    >>>layers = app.modeler.primitives.layers
     """
+    def __init__(self, modeler, roughnessunits="um"):
+        self._modeler = modeler
+        self._app = self._modeler._app
+        self._currentId = 0
+        self.layers = {}
+        self.lengthUnitRough = roughnessunits
+        self.logger = self._app.logger
 
     @property
-    def _messenger(self):
-        """Messenger."""
-        return self._parent._messenger
+    def _oeditor(self):
+        """Editor.
 
-    @property
-    def modeler(self):
-        """Modeler."""
-        return self._modeler
+        References
+        ----------
 
-    @property
-    def oeditor(self):
-        """Editor."""
-        return self.modeler.oeditor
+        >>> oEditor = oDesign.SetActiveEditor("Layout")"""
+        return self._modeler._app._odesign.SetActiveEditor("Layout")
 
     @property
     def LengthUnit(self):
         """Length units."""
-        return self.modeler.model_units
+        return self._modeler.model_units
 
     @property
     def all_layers(self):
@@ -453,8 +607,13 @@ class Layers(object):
         -------
         list
            List of stackup layers.
+
+        References
+        ----------
+
+        >>> oEditor.GetStackupLayerNames()
         """
-        return self.oeditor.GetStackupLayerNames()
+        return self._oeditor.GetStackupLayerNames()
 
     @property
     def all_signal_layers(self):
@@ -495,13 +654,6 @@ class Layers(object):
                 die.append(layid)
         return die
 
-    def __init__(self, parent, modeler, roughnessunits="um"):
-        self._modeler = modeler
-        self._parent = parent
-        self._currentId = 0
-        self.layers = defaultdict(Layer)
-        self.lengthUnitRough = roughnessunits
-
     @aedt_exception_handler
     def layer_id(self, name):
         """Retrieve a layer ID.
@@ -530,15 +682,15 @@ class Layers(object):
         int
             Number of layers in the current stackup.
         """
-        layernames = self.oeditor.GetStackupLayerNames()
+        layernames = self._oeditor.GetStackupLayerNames()
         for el in layernames:
-            o = Layer(self.oeditor, "signal", self.LengthUnit, self.lengthUnitRough)
+            o = Layer(self, "signal")
             o.name = el
-            infos = self.oeditor.GetLayerInfo(el)
+            infos = self._oeditor.GetLayerInfo(el)
             infos = [i.split(": ") for i in infos]
             infosdict = {i[0].strip(): i[1].strip() for i in infos}
-            if infosdict["Type"] == 'metalizedsignal':
-                o.type = 'signal'
+            if infosdict["Type"] == "metalizedsignal":
+                o.type = "signal"
             else:
                 o.type = infosdict["Type"]
             o.locked = _str2bool(infosdict["IsLocked"])
@@ -555,7 +707,7 @@ class Layers(object):
             o.index = int(infosdict["Index"])
             o.thickness = _conv_number(infosdict["LayerThickness"])
             o.lowerelevation = _conv_number(infosdict["LowerElevation0"])
-            o.fillmaterial = infosdict['FillMaterial0']
+            o.fillmaterial = infosdict["FillMaterial0"]
             o.material = infosdict["Material0"]
             if "EtchFactor" in infosdict:
                 o.useetch = True
@@ -611,8 +763,9 @@ class Layers(object):
         return len(self.layers)
 
     @aedt_exception_handler
-    def add_layer(self, layername, layertype="signal", thickness="0mm", elevation="0mm", material="copper",
-                  isnegative=False):
+    def add_layer(
+        self, layername, layertype="signal", thickness="0mm", elevation="0mm", material="copper", isnegative=False
+    ):
         """Add a layer.
 
         Parameters
@@ -632,10 +785,10 @@ class Layers(object):
 
         Returns
         -------
-        :class: `pyaedt.modules.LayerStackup.Layer`
+        :class:`pyaedt.modules.LayerStackup.Layer`
             Layer object.
         """
-        newlayer = Layer(self.oeditor, layertype, self.LengthUnit, self.lengthUnitRough, isnegative)
+        newlayer = Layer(self, layertype, isnegative)
         newlayer.name = layername
         newlayer.thickness = thickness
         newlayer.lowerelevation = elevation

@@ -1,9 +1,14 @@
-import warnings
+import os
 
-from .Analysis import Analysis
-from ..modeler.Model2D import Modeler2D
-from ..modules.Mesh import Mesh
-from ..generic.general_methods import aedt_exception_handler, generate_unique_name
+from pyaedt.application.Analysis import Analysis
+from pyaedt.modeler.Model2D import Modeler2D
+from pyaedt.modules.Mesh import Mesh
+from pyaedt.generic.general_methods import aedt_exception_handler, is_ironpython
+
+if is_ironpython:
+    from pyaedt.modules.PostProcessor import PostProcessor
+else:
+    from pyaedt.modules.AdvancedPostProcessing import PostProcessor
 
 
 class FieldAnalysis2D(Analysis):
@@ -32,17 +37,17 @@ class FieldAnalysis2D(Analysis):
         Name of the setup to use as the nominal. The default is
         ``None``, in which case the active setup is used or
         nothing is used.
-    specified_version: str, optional
+    specified_version : str, optional
         Version of AEDT  to use. The default is ``None``, in which case
         the active version or latest installed version is used.
     NG : bool, optional
         Whether to run AEDT in the non-graphical mode. The default
         is ``False``, which launches AEDT in the graphical mode.
-    AlwaysNew : bool, optional
+    new_desktop_session : bool, optional
         Whether to launch an instance of AEDT in a new thread, even if
         another instance of the ``specified_version`` is active on the
         machine. The default is ``True``.
-    release_on_exit : bool, optional
+    close_on_exit : bool, optional
         Whether to release  AEDT on exit. The default is ``False``.
     student_version : bool, optional
         Whether to enable the student version of AEDT. The default
@@ -50,14 +55,61 @@ class FieldAnalysis2D(Analysis):
 
     """
 
-    def __init__(self, application, projectname, designname, solution_type, setup_name=None,
-                 specified_version=None, NG=False, AlwaysNew=False, release_on_exit=False, student_version=False):
+    def __init__(
+        self,
+        application,
+        projectname,
+        designname,
+        solution_type,
+        setup_name=None,
+        specified_version=None,
+        non_graphical=False,
+        new_desktop_session=False,
+        close_on_exit=False,
+        student_version=False,
+    ):
 
-        Analysis.__init__(self, application, projectname, designname, solution_type, setup_name,
-                          specified_version, NG, AlwaysNew, release_on_exit, student_version)
+        Analysis.__init__(
+            self,
+            application,
+            projectname,
+            designname,
+            solution_type,
+            setup_name,
+            specified_version,
+            non_graphical,
+            new_desktop_session,
+            close_on_exit,
+            student_version,
+        )
+        self._osolution = self._odesign.GetModule("Solutions")
+        self._oboundary = self._odesign.GetModule("BoundarySetup")
+
         self._modeler = Modeler2D(self)
         self._mesh = Mesh(self)
-        # self._post = PostProcessor(self)
+        self._post = PostProcessor(self)
+
+    @property
+    def osolution(self):
+        """Solution Module.
+
+        References
+        ----------
+
+        >>> oModule = oDesign.GetModule("Solutions")
+        """
+        return self._osolution
+
+    @property
+    def oboundary(self):
+        """Boundary Module.
+
+        References
+        ----------
+
+        >>> oModule = oDesign.GetModule("BoundarySetup")
+        """
+        return self._oboundary
 
     @property
     def modeler(self):
@@ -65,7 +117,7 @@ class FieldAnalysis2D(Analysis):
 
         Returns
         -------
-        :class: `pyaedt.modeler.Model2D.Modeler2D`
+        :class:`pyaedt.modeler.Model2D.Modeler2D`
         """
         return self._modeler
 
@@ -75,7 +127,7 @@ class FieldAnalysis2D(Analysis):
 
         Returns
         -------
-        :class: `pyaedt.modules.Mesh.Mesh`
+        :class:`pyaedt.modules.Mesh.Mesh`
         """
         return self._mesh
 
@@ -84,17 +136,32 @@ class FieldAnalysis2D(Analysis):
     #     return self._post
 
     @aedt_exception_handler
-    def assignmaterial(self, obj, mat):
-        """Assign a material to one or more objects.
+    def export_mesh_stats(self, setup_name, variation_string="", mesh_path=None):
+        """Export mesh statistics to a file.
 
-        .. deprecated:: 0.3.1
-           Use :func:`FieldAnalysis2D.assign_material` instead.
+        Parameters
+        ----------
+        setup_name :str
+            Setup name.
+        variation_string : str, optional
+            Variation List.
+        mesh_path : str, optional
+            Full path to mesh statistics file.
 
+        Returns
+        -------
+        str
+            File Path.
+
+        References
+        ----------
+
+        >>> oDesign.ExportMeshStats
         """
-        # raise a DeprecationWarning.  User won't have to change anything
-        warnings.warn('assignmaterial is deprecated. Use assign_material instead.',
-                      DeprecationWarning)
-        self.assign_material(obj, mat)
+        if not mesh_path:
+            mesh_path = os.path.join(self.project_path, "meshstats.ms")
+        self.odesign.ExportMeshStats(setup_name, variation_string, mesh_path)
+        return mesh_path
 
     @aedt_exception_handler
     def assign_material(self, obj, mat):
@@ -113,6 +180,10 @@ class FieldAnalysis2D(Analysis):
         bool
             ``True`` when successful, ``False`` when failed.
 
+        References
+        ----------
+
+        >>> oEditor.AssignMaterial
         """
         mat = mat.lower()
         selections = self.modeler.convert_to_selections(obj)
@@ -128,8 +199,8 @@ class FieldAnalysis2D(Analysis):
             else:
                 arg2.append("SolveInside:="), arg2.append(False)
             self.modeler.oeditor.AssignMaterial(arg1, arg2)
-            self._messenger.add_info_message('Assign Material ' + mat + ' to object ' + selections)
-            if type(obj) is list:
+            self.logger.info("Assign Material " + mat + " to object " + selections)
+            if isinstance(obj, list):
                 for el in obj:
                     self.modeler.primitives[el].material_name = mat
             else:
@@ -143,8 +214,8 @@ class FieldAnalysis2D(Analysis):
             else:
                 arg2.append("SolveInside:="), arg2.append(False)
             self.modeler.oeditor.AssignMaterial(arg1, arg2)
-            self._messenger.add_info_message('Assign Material ' + mat + ' to object ' + selections)
-            if type(obj) is list:
+            self.logger.info("Assign Material " + mat + " to object " + selections)
+            if isinstance(obj, list):
                 for el in obj:
                     self.modeler.primitives[el].material_name = mat
             else:
@@ -152,5 +223,5 @@ class FieldAnalysis2D(Analysis):
 
             return True
         else:
-            self._messenger.add_error_message("Material Does Not Exists")
+            self.logger.error("Material does not exist.")
             return False

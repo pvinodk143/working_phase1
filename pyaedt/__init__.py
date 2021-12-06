@@ -1,34 +1,35 @@
-import os
-# Import exception handling here due to:
-# https://github.com/pyansys/PyAEDT/pull/243
+# -*- coding: utf-8 -*-
 
+import os
+
+os.environ["ANSYSEM_FEATURE_SF6694_NON_GRAPHICAL_COMMAND_EXECUTION_ENABLE"] = "1"
+os.environ["ANSYSEM_FEATURE_SF159726_SCRIPTOBJECT_ENABLE"] = "1"
+
+from pyaedt.generic import constants
+from pyaedt.generic.general_methods import aedt_exception_handler, generate_unique_name, _retry_ntimes
+from pyaedt.generic.general_methods import is_ironpython, _pythonver, inside_desktop, convert_remote_object
+from pyaedt.aedt_logger import AedtLogger
 try:
-    from .generic.general_methods import aedt_exception_handler, generate_unique_name, retry_ntimes
-    from .hfss3dlayout import Hfss3dLayout
-    from .hfss import Hfss
-    from .circuit import Circuit
-    from .q3d import Q2d, Q3d
-    from .siwave import Siwave
-    from .icepak import Icepak
-    from .edb import Edb
-    from .maxwell import Maxwell2d, Maxwell3d
-    from .mechanical import Mechanical
-    from .rmxprt import Rmxprt
-    from .simplorer import Simplorer
-    from .desktop import Desktop
-    from .emit import Emit
+    from pyaedt.generic.design_types import Hfss3dLayout
 except:
-    from .generic.general_methods import aedt_exception_handler, generate_unique_name, retry_ntimes
-    from .hfss3dlayout import Hfss3dLayout
-    from .hfss import Hfss
-    from .circuit import Circuit
-    from .q3d import Q2d, Q3d
-    from .siwave import Siwave
-    from .icepak import Icepak
-    from .edb import Edb
-    from .maxwell import Maxwell2d, Maxwell3d
-    from .mechanical import Mechanical
-    from .rmxprt import Rmxprt
-    from .simplorer import Simplorer
-    from .desktop import Desktop
-    from .emit import Emit
+    from pyaedt.generic.design_types import Hfss3dLayout
+
+from pyaedt.generic.design_types import (Hfss,
+                                         Circuit,
+                                         Q2d,
+                                         Q3d,
+                                         Siwave,
+                                         Icepak,
+                                         Edb,
+                                         Maxwell3d,
+                                         Maxwell2d,
+                                         Mechanical,
+                                         Rmxprt,
+                                         Simplorer,
+                                         Emit,
+                                         get_pyaedt_app,
+                                         Desktop)
+
+
+
+

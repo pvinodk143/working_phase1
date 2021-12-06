@@ -9,9 +9,11 @@ documentation.
 .. toctree::
    :maxdepth: 2
 
+   ClientServer
    Application
    DesktopMessenger
    CoreModules
+   CoreEdb
    Primitives
    Mesh
    MaterialManagement
@@ -19,4 +21,6 @@ documentation.
    Post
    SetupTemplates
    Boundaries
+   MultiPartComponent
+   Constants
 

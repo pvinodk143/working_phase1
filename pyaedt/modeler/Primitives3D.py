@@ -1,23 +1,36 @@
-from ..generic.general_methods import aedt_exception_handler
-from .Primitives import Primitives
-from .GeometryOperators import GeometryOperators
-from ..application.Analysis import CoordinateSystemAxis
-from .Object3d import Object3d
+import os
+from pyaedt.generic.general_methods import aedt_exception_handler
+from pyaedt.modeler.Primitives import Primitives
+from pyaedt.modeler.GeometryOperators import GeometryOperators
+from pyaedt.modeler.multiparts import MultiPartComponent, Environment
+from pyaedt.modeler.actors import Person, Bird, Vehicle
+from pyaedt.generic.general_methods import _retry_ntimes
+
 
 class Primitives3D(Primitives, object):
     """Manages primitives in 3D tools.
 
+    This class is inherited in the caller application and is
+    accessible through the primitives variable part of modeler object(
+    e.g. ``hfss.modeler.primitives`` or ``icepak.modeler.primitives``).
+
     Parameters
     ----------
-    parent : str
-        Name of the parent AEDT application.
     modeler : str
         Name of the modeler.
 
+    Examples
+    --------
+    Basic usage demonstrated with an HFSS, Maxwell 3D, Icepak, Q3D, or Mechanical design:
+
+    >>> from pyaedt import Hfss
+    >>> aedtapp = Hfss()
+    >>> prim = aedtapp.modeler.primitives
     """
 
-    def __init__(self, parent, modeler):
-        Primitives.__init__(self, parent, modeler)
+    def __init__(self, modeler):
+        Primitives.__init__(self, modeler)
+        self.multiparts = []
 
     @aedt_exception_handler
     def is3d(self):
@@ -28,7 +41,8 @@ class Primitives3D(Primitives, object):
         bool
             ``True`` when successful, ``False`` when failed.
 
-    """
+        """
+
     @aedt_exception_handler
     def create_box(self, position, dimensions_list, name=None, matname=None):
         """Create a box.
@@ -49,8 +63,13 @@ class Primitives3D(Primitives, object):
 
         Returns
         -------
-        :class: `pyaedt.modeler.Object3d.Object3d`
+        :class:`pyaedt.modeler.Object3d.Object3d`
             3D object.
+
+        References
+        ----------
+
+        >>> oEditor.CreateBox
 
         Examples
         --------
@@ -75,7 +94,7 @@ class Primitives3D(Primitives, object):
         vArg1.append("YSize:="), vArg1.append(YSize)
         vArg1.append("ZSize:="), vArg1.append(ZSize)
         vArg2 = self._default_object_attributes(name=name, matname=matname)
-        new_object_name = self.oeditor.CreateBox(vArg1, vArg2)
+        new_object_name = _retry_ntimes(10, self._oeditor.CreateBox, vArg1, vArg2)
         return self._create_object(new_object_name)
 
     @aedt_exception_handler
@@ -84,8 +103,9 @@ class Primitives3D(Primitives, object):
 
         Parameters
         ----------
-        cs_axis : str
+        cs_axis : int or str
             Axis of rotation of the starting point around the center point.
+            :class:`pyaedt.constants.AXIS` Enumerator can be used as input.
         position : list
             Center point of the cylinder in a list of ``(x, y, z)`` coordinates.
         radius : float
@@ -93,7 +113,7 @@ class Primitives3D(Primitives, object):
         height : float
             Height of the cylinder.
         numSides : int, optional
-            Number of sides. The default is ``0``, shich is correct for
+            Number of sides. The default is ``0``, which is correct for
             a cylinder.
         name : str, optional
             Name of the cylinder. The default is ``None``, in which case
@@ -104,8 +124,13 @@ class Primitives3D(Primitives, object):
 
         Returns
         -------
-        :class: `pyaedt.modeler.Object3d.Object3d`
+        :class:`pyaedt.modeler.Object3d.Object3d`
             3D object.
+
+        References
+        ----------
+
+        >>> oEditor.CreateCylinder
 
         Examples
         --------
@@ -130,7 +155,7 @@ class Primitives3D(Primitives, object):
         vArg1.append("WhichAxis:="), vArg1.append(szAxis)
         vArg1.append("NumSides:="), vArg1.append('{}'.format(numSides))
         vArg2 = self._default_object_attributes(name=name, matname=matname)
-        new_object_name = self.oeditor.CreateCylinder(vArg1, vArg2)
+        new_object_name = self._oeditor.CreateCylinder(vArg1, vArg2)
         return self._create_object(new_object_name)
 
     @aedt_exception_handler
@@ -162,15 +187,21 @@ class Primitives3D(Primitives, object):
 
         Returns
         -------
-        :class: `pyaedt.modeler.Object3d.Object3d`
+        :class:`pyaedt.modeler.Object3d.Object3d`
             3D object.
+
+        References
+        ----------
+
+        >>> oEditor.CreateRegularPolyhedron
 
         Examples
         --------
         >>> from pyaedt import Hfss
         >>> aedtapp = Hfss()
-        >>> ret_obj = aedtapp.modeler.primitives.create_polyhedron(cs_axis='X', center_position=[0, 0, 0], start_position=[0,5,0],
-        ...                                                        height=0.5, num_sides=8, name="mybox", matname="copper")
+        >>> ret_obj = aedtapp.modeler.primitives.create_polyhedron(cs_axis='X', center_position=[0, 0, 0],
+        ...                                                        start_position=[0,5,0], height=0.5,
+        ...                                                        num_sides=8, name="mybox", matname="copper")
 
         """
         test = cs_axis
@@ -191,7 +222,7 @@ class Primitives3D(Primitives, object):
         vArg1.append("NumSides:="), vArg1.append(int(num_sides))
         vArg1.append("WhichAxis:="), vArg1.append(cs_axis)
         vArg2 = self._default_object_attributes(name=name, matname=matname)
-        new_object_name = self.oeditor.CreateRegularPolyhedron(vArg1, vArg2)
+        new_object_name = self._oeditor.CreateRegularPolyhedron(vArg1, vArg2)
         return self._create_object(new_object_name)
 
     @aedt_exception_handler
@@ -220,8 +251,13 @@ class Primitives3D(Primitives, object):
 
         Returns
         -------
-        :class: `pyaedt.modeler.Object3d.Object3d`
+        :class:`pyaedt.modeler.Object3d.Object3d`
             3D object.
+
+        References
+        ----------
+
+        >>> oEditor.CreateCone
 
         Examples
         --------
@@ -247,7 +283,7 @@ class Primitives3D(Primitives, object):
         vArg1.append("BottomRadius:="), vArg1.append(RadiusBt)
         vArg1.append("TopRadius:="), vArg1.append(RadiusUp)
         vArg2 = self._default_object_attributes(name=name, matname=matname)
-        new_object_name = self.oeditor.CreateCone(vArg1, vArg2)
+        new_object_name = self._oeditor.CreateCone(vArg1, vArg2)
         return self._create_object(new_object_name)
 
     @aedt_exception_handler
@@ -270,8 +306,13 @@ class Primitives3D(Primitives, object):
 
         Returns
         -------
-        :class: `pyaedt.modeler.Object3d.Object3d`
+        :class:`pyaedt.modeler.Object3d.Object3d`
             3D object.
+
+        References
+        ----------
+
+        >>> oEditor.CreateSphere
 
         Examples
         --------
@@ -291,34 +332,38 @@ class Primitives3D(Primitives, object):
         vArg1.append("ZCenter:="), vArg1.append(ZCenter)
         vArg1.append("Radius:="), vArg1.append(Radius)
         vArg2 = self._default_object_attributes(name=name, matname=matname)
-        new_object_name = self.oeditor.CreateSphere(vArg1, vArg2)
+        new_object_name = self._oeditor.CreateSphere(vArg1, vArg2)
         return self._create_object(new_object_name)
 
     @aedt_exception_handler
-    def create_bondwire(self, start_position, end_position, h1=0.2, h2=0, alpha=80, beta=5, bond_type=0,
-                        diameter=0.025, facets=6, name=None, matname=None):
+    def create_bondwire(self, start_position, end_position, h1=0.2,
+                        h2=0, alpha=80, beta=5, bond_type=0,
+                        diameter=0.025, facets=6, name=None,
+                        matname=None):
         """Create a bondwire.
 
         Parameters
         ----------
         start_position : list
-            List of ``[x, y, z]`` coordinates for the starting position of the bond pad.
+            List of ``[x, y, z]`` coordinates for the starting
+            position of the bond pad.
         end_position :  list
-            List of ``[x, y, z]`` coordinates for the ending position of the bond pad.
-        h1: float, optional
+            List of ``[x, y, z]`` coordinates for the ending position
+            of the bond pad.
+        h1 : float, optional
             Height between the IC  die I/O pad and the top of the bondwire.
             The default is ``0.2``.
-        h2: float, optional
+        h2 : float, optional
             Height of the IC die I/O pad above the lead frame. The default
             is ``0``. A negative value indicates that the I/O pad is below
             the lead frame.
-        alpha: float, optional
+        alpha : float, optional
             Angle in degrees between the xy plane and the wire bond at the
             IC die I/O pad. The default is ``80``.
-        beta: float, optional
+        beta : float, optional
             Angle in degrees between the xy plane and the wire bond at the
             lead frame. The default is ``5``.
-        bond_type: int, optional
+        bond_type : int, optional
             Type of the boundwire, which indicates its shape. Options are:
 
             * ''0'' for JEDEC 5-point
@@ -326,9 +371,9 @@ class Primitives3D(Primitives, object):
             * ''2`` for Low
 
             The default is ''0``.
-        diameter: float, optional
+        diameter : float, optional
             Diameter of the wire. The default is ``0.025``.
-        facets: int, optional
+        facets : int, optional
             Number of wire facets. The default is ``6``.
         name : str, optional
             Name of the bondwire. The default is ``None``, in which case
@@ -339,8 +384,13 @@ class Primitives3D(Primitives, object):
 
         Returns
         -------
-        :class: `pyaedt.modeler.Object3d.Object3d`
+        :class:`pyaedt.modeler.Object3d.Object3d`
             3D object.
+
+        References
+        ----------
+
+        >>> oEditor.CreateBondwire
 
         Examples
         --------
@@ -349,8 +399,8 @@ class Primitives3D(Primitives, object):
         >>> origin = [0,0,0]
         >>> endpos = [10,5,20]
         >>> #Material and name are not mandatory fields
-        >>> object_id = hfss.modeler.primivites.create_bondwire(origin, endpos,h1=0.5, h2=0.1, alpha=75, beta=4,bond_type=0, name="mybox", matname="copper")
-
+        >>> object_id = hfss.modeler.primivites.create_bondwire(origin, endpos,h1=0.5, h2=0.1, alpha=75, beta=4,
+        ...                                                     bond_type=0, name="mybox", matname="copper")
         """
         XPosition, YPosition, ZPosition = self._pos_with_arg(start_position)
         if XPosition is None or YPosition is None or ZPosition is None:
@@ -358,15 +408,15 @@ class Primitives3D(Primitives, object):
         XSize, YSize, ZSize = self._pos_with_arg(end_position)
         if XSize is None or YSize is None or YSize is None:
             raise AttributeError("Dimension Argument must be a valid 3 Element List")
-        if bond_type==0:
+        if bond_type == 0:
             bondwire = "JEDEC_5Points"
-        elif bond_type==1:
+        elif bond_type == 1:
             bondwire = "JEDEC_4Points"
 
-        elif bond_type==2:
+        elif bond_type == 2:
             bondwire = "LOW"
         else:
-            self._messenger.add_error_message("Wrong Profile Type")
+            self.logger.error("Wrong Profile Type")
             return False
         vArg1 = ["NAME:BondwireParameters"]
         vArg1.append("WireType:="), vArg1.append(bondwire)
@@ -387,17 +437,18 @@ class Primitives3D(Primitives, object):
         vArg1.append("WhichAxis:="), vArg1.append("Z")
         vArg1.append("ReverseDirection:="), vArg1.append(False)
         vArg2 = self._default_object_attributes(name=name, matname=matname)
-        new_object_name = self.oeditor.CreateBondwire(vArg1, vArg2)
+        new_object_name = self._oeditor.CreateBondwire(vArg1, vArg2)
         return self._create_object(new_object_name)
 
     @aedt_exception_handler
-    def create_rectangle(self, csPlane, position, dimension_list,  name=None, matname=None, is_covered=True):
+    def create_rectangle(self, csPlane, position, dimension_list, name=None, matname=None, is_covered=True):
         """Create a rectangle.
 
         Parameters
         ----------
-        cs_plane :
+        csPlane : str or int
             Coordinate system plane for orienting the rectangle.
+            :class:`pyaedt.constants.PLANE` Enumerator can be used as input.
         position : list or Position
             List of ``[x, y, z]`` coordinates for the center point of the rectangle or
             the positionApplicationName.modeler.Position(x,y,z) object.
@@ -417,8 +468,13 @@ class Primitives3D(Primitives, object):
         pyaedt.modeler.Object3d.Object3d
             3D object.
 
+        References
+        ----------
+
+        >>> oEditor.CreateRectangle
+
         """
-        szAxis = GeometryOperators.cs_plane_str(csPlane)
+        szAxis = GeometryOperators.cs_plane_to_axis_str(csPlane)
         XStart, YStart, ZStart = self._pos_with_arg(position)
 
         Width = self._arg_with_dim(dimension_list[0])
@@ -433,7 +489,7 @@ class Primitives3D(Primitives, object):
         vArg1.append("Height:="), vArg1.append(Height)
         vArg1.append("WhichAxis:="), vArg1.append(szAxis)
         vArg2 = self._default_object_attributes(name=name, matname=matname)
-        new_object_name = self.oeditor.CreateRectangle(vArg1, vArg2)
+        new_object_name = self._oeditor.CreateRectangle(vArg1, vArg2)
         return self._create_object(new_object_name)
 
     @aedt_exception_handler
@@ -442,8 +498,9 @@ class Primitives3D(Primitives, object):
 
         Parameters
         ----------
-        cs_plane :
+        cs_plane : str or int
             Coordinate system plane for orienting the circle.
+            :class:`pyaedt.constants.PLANE` Enumerator can be used as input.
         position : list
             List of ``[x, y, z]`` coordinates for the center point of the circle.
         radius : float
@@ -459,11 +516,16 @@ class Primitives3D(Primitives, object):
 
         Returns
         -------
-        :class: `pyaedt.modeler.Object3d.Object3d`
+        :class:`pyaedt.modeler.Object3d.Object3d`
             3D object.
 
+        References
+        ----------
+
+        >>> oEditor.CreateCircle
+
         """
-        szAxis = GeometryOperators.cs_plane_str(cs_plane)
+        szAxis = GeometryOperators.cs_plane_to_axis_str(cs_plane)
         XCenter, YCenter, ZCenter = self._pos_with_arg(position)
         Radius = self._arg_with_dim(radius)
         vArg1 = ["NAME:CircleParameters"]
@@ -475,7 +537,7 @@ class Primitives3D(Primitives, object):
         vArg1.append("WhichAxis:="), vArg1.append(szAxis)
         vArg1.append("NumSegments:="), vArg1.append('{}'.format(numSides))
         vArg2 = self._default_object_attributes(name=name, matname=matname)
-        new_object_name = self.oeditor.CreateCircle(vArg1, vArg2)
+        new_object_name = self._oeditor.CreateCircle(vArg1, vArg2)
         return self._create_object(new_object_name)
 
     @aedt_exception_handler
@@ -484,8 +546,9 @@ class Primitives3D(Primitives, object):
 
         Parameters
         ----------
-        cs_plane : str
+        cs_plane : str or int
             Coordinate system plane for orienting the ellipse.
+            :class:`pyaedt.constants.PLANE` Enumerator can be used as input.
         position : list
             List of ``[x, y, z]`` coordinates for the center point of the ellipse.
         major_raidus : float
@@ -505,11 +568,16 @@ class Primitives3D(Primitives, object):
 
         Returns
         -------
-        :class: `pyaedt.modeler.Object3d.Object3d`
+        :class:`pyaedt.modeler.Object3d.Object3d`
             3D object.
 
+        References
+        ----------
+
+        >>> oEditor.CreateEllipse
+
         """
-        szAxis = GeometryOperators.cs_plane_str(cs_plane)
+        szAxis = GeometryOperators.cs_plane_to_axis_str(cs_plane)
         XStart, YStart, ZStart = self._pos_with_arg(position)
 
         MajorRadius = self._arg_with_dim(major_raidus)
@@ -524,11 +592,11 @@ class Primitives3D(Primitives, object):
         vArg1.append("Ratio:="), vArg1.append(Ratio)
         vArg1.append("WhichAxis:="), vArg1.append(szAxis)
         vArg2 = self._default_object_attributes(name=name, matname=matname)
-        new_object_name = self.oeditor.CreateEllipse(vArg1, vArg2)
+        new_object_name = self._oeditor.CreateEllipse(vArg1, vArg2)
         return self._create_object(new_object_name)
 
     @aedt_exception_handler
-    def create_equationbased_curve(self, x_t=0, y_t=0, z_t=0, t_start=0, t_end=1, num_points = 0,
+    def create_equationbased_curve(self, x_t=0, y_t=0, z_t=0, t_start=0, t_end=1, num_points=0,
                                    name=None, xsection_type=None, xsection_orient=None,
                                    xsection_width=1, xsection_topwidth=1, xsection_height=1, xsection_num_seg=0,
                                    xsection_bend_type=None):
@@ -580,12 +648,18 @@ class Primitives3D(Primitives, object):
 
         Returns
         -------
-        :class: `pyaedt.modeler.Object3d.Object3d`
+        :class:`pyaedt.modeler.Object3d.Object3d`
             3D object.
+
+        References
+        ----------
+
+        >>> oEditor.CreateEquationCurve
 
         """
         x_section = self._crosssection_arguments(type=xsection_type, orient=xsection_orient, width=xsection_width,
-                                                 topwidth=xsection_topwidth, height=xsection_height, num_seg=xsection_num_seg,
+                                                 topwidth=xsection_topwidth, height=xsection_height,
+                                                 num_seg=xsection_num_seg,
                                                  bend_type=xsection_bend_type)
 
         vArg1 = ["NAME:EquationBasedCurveParameters",
@@ -594,13 +668,13 @@ class Primitives3D(Primitives, object):
                  "ZtFunction:=", str(z_t),
                  "tStart:=", str(t_start),
                  "tEnd:=", str(t_end),
-                 "NumOfPointsOnCurve:="	, num_points,
-                 "Version:="		, 1,
+                 "NumOfPointsOnCurve:=", num_points,
+                 "Version:=", 1,
                  x_section]
 
         vArg2 = self._default_object_attributes(name)
 
-        new_name = self.oeditor.CreateEquationCurve(vArg1, vArg2)
+        new_name = self._oeditor.CreateEquationCurve(vArg1, vArg2)
         return self._create_object(new_name)
 
     @aedt_exception_handler
@@ -614,8 +688,13 @@ class Primitives3D(Primitives, object):
 
         Returns
         -------
-        :class: `pyaedt.modeler.Object3d.Object3d`
+        :class:`pyaedt.modeler.Object3d.Object3d`
             3D object.
+
+        References
+        ----------
+
+        >>> oEditor.CreateHelix
 
         """
         vArg1 = ["NAME:Selections"]
@@ -624,7 +703,7 @@ class Primitives3D(Primitives, object):
 
         vArg2 = udphelixdefinition.toScript(self.model_units)
 
-        new_name = self.oeditor.CreateHelix(vArg1, vArg2)
+        new_name = self._oeditor.CreateHelix(vArg1, vArg2)
         return self._create_object(new_name)
 
     @aedt_exception_handler
@@ -640,14 +719,19 @@ class Primitives3D(Primitives, object):
 
         Returns
         -------
-        :class: `pyaedt.modeler.Object3d.Object3d`
+        :class:`pyaedt.modeler.Object3d.Object3d`
             3D object.
+
+        References
+        ----------
+
+        >>> oEditor.ChangeProperty
 
         """
         this_object = self._resolve_object(object_name)
         edges = this_object.edges
         for i in reversed(range(len(edges))):
-            self.oeditor.ChangeProperty(
+            self._oeditor.ChangeProperty(
                 [
                     "NAME:AllTabs",
                     [
@@ -682,21 +766,26 @@ class Primitives3D(Primitives, object):
 
         Returns
         -------
-        :class: `pyaedt.modeler.Object3d.Object3d`
+        :class:`pyaedt.modeler.Object3d.Object3d`
             3D object.
 
+        References
+        ----------
+
+        >>> oEditor.CreateUserDefinedModel
+
         """
-        vArg1 = ["NAME:UserDefinedModelParameters",["NAME:Definition"], ["NAME:Options"]]
+        vArg1 = ["NAME:UserDefinedModelParameters", ["NAME:Definition"], ["NAME:Options"]]
         vArgParamVector = ["NAME:GeometryParams"]
 
         for pair in udm_params_list:
-            if type(pair) is list:
+            if isinstance(pair, list):
                 name = pair[0]
                 val = pair[1]
             else:
                 name = pair.Name
                 val = pair.Value
-            if type(val) is int:
+            if isinstance(val, int):
                 vArgParamVector.append(
                     ["NAME:UDMParam", "Name:=", name, "Value:=", str(val), "PropType2:=", 3, "PropFlag2:=", 2])
             elif str(val)[0] in '0123456789':
@@ -716,9 +805,9 @@ class Primitives3D(Primitives, object):
         vArg1.append("2.0")
         vArg1.append("ConnectionID:=")
         vArg1.append("")
-        oname = self.oeditor.CreateUserDefinedModel(vArg1)
+        oname = self._oeditor.CreateUserDefinedModel(vArg1)
         if oname:
-            object_lists = self.oeditor.GetPartsForUserDefinedModel(oname)
+            object_lists = self._oeditor.GetPartsForUserDefinedModel(oname)
             for new_name in object_lists:
                 self._create_object(new_name)
             return True
@@ -747,23 +836,39 @@ class Primitives3D(Primitives, object):
         str
             Name of the created 3D component.
 
+        References
+        ----------
+
+        >>> oEditor.Insert3DComponent
         """
         vArg1 = ["NAME:InsertComponentData"]
         sz_geo_params = ""
+        if not geoParams:
+            geometryparams = self._app.get_components3d_vars(compFile)
+            if geometryparams:
+                geoParams = geometryparams
+
         if geoParams:
             sz_geo_params = "".join(["{0}='{1}' ".format(par, val) for par, val in geoParams.items()])
-        vArg1.append("GeometryParameters:=")
-        vArg1.append(sz_geo_params)
-        vArg1.append("MaterialParameters:=")
-        vArg1.append(szMatParams)
-        vArg1.append("DesignParameters:=")
-        vArg1.append(szDesignParams)
         vArg1.append("TargetCS:=")
         vArg1.append(targetCS)
         vArg1.append("ComponentFile:=")
         vArg1.append(compFile)
-        new_object_name = self.oeditor.Insert3DComponent(vArg1)
-        #TODO return an object
+        vArg1.append("IsLocal:=")
+        vArg1.append(False)
+        vArg1.append("UniqueIdentifier:=")
+        vArg1.append("")
+        varg2 = ["NAME:InstanceParameters"]
+        varg2.append("GeometryParameters:=")
+        varg2.append(sz_geo_params)
+        varg2.append("MaterialParameters:=")
+        varg2.append(szMatParams)
+        varg2.append("DesignParameters:=")
+        varg2.append(szDesignParams)
+        vArg1.append(varg2)
+        new_object_name = self._oeditor.Insert3DComponent(vArg1)
+        # TODO return an object
+        self.refresh_all_ids()
         return new_object_name
 
     @aedt_exception_handler
@@ -780,9 +885,381 @@ class Primitives3D(Primitives, object):
         List
             List of objects belonging to the 3D component.
 
+        References
+        ----------
+
+        >>> oeditor.GetChildObject
         """
-        compobj = self.oeditor.GetChildObject(componentname)
-        if compobj:
-            return list(compobj.GetChildNames())
+        if self._app._is_object_oriented_enabled():
+            compobj = self._oeditor.GetChildObject(componentname)
+            if compobj:
+                return list(compobj.GetChildNames())
         else:
-            return []
+            self.logger.warning("Object Oriented Beta Option is not enabled in this Desktop.")
+        return []
+
+    @aedt_exception_handler
+    def _check_actor_folder(self, actor_folder):
+        if not os.path.exists(actor_folder):
+            self.logger.error("Folder {} does not exist.".format(actor_folder))
+            return False
+        if not any(fname.endswith('.json') for fname in os.listdir(actor_folder)) or not any(
+                fname.endswith('.a3dcomp') for fname in os.listdir(actor_folder)):
+            self.logger.error("At least one json and one a3dcomp file is needed.")
+            return False
+        return True
+
+    @aedt_exception_handler
+    def _initialize_multipart(self):
+        if MultiPartComponent._t in self._app._variable_manager.independent_variable_names:
+            return True
+        else:
+            return MultiPartComponent.start(self._app)
+
+    @aedt_exception_handler
+    def add_person(self, actor_folder, speed=0.0, global_offset=[0, 0, 0], yaw=0, pitch=0, roll=0,
+                   relative_cs_name=None, actor_name=None):
+        """Add a Walking Person Multipart from 3D Components.
+
+        It requires a json file in the folder containing person
+        infos. An example json file follows:
+
+         .. code-block:: json
+
+            {
+                "name": "person3",
+                "version": 1,
+                "class":"person",
+                "stride":"0.76meter",
+                "xlim":["-.43",".43"],
+                "ylim":["-.25",".25"],
+                "parts": {
+                    "arm_left": {
+                        "comp_name": "arm_left.a3dcomp",
+                        "rotation_cs":["-.04","0","1.37"],
+                        "rotation":"-30deg",
+                        "compensation_angle":"-15deg",
+                        "rotation_axis":"Y"
+                        },
+                    "arm_right": {
+                        "comp_name": "arm_right.a3dcomp",
+                        "rotation_cs":["0","0","1.37"],
+                        "rotation":"30deg",
+                        "compensation_angle":"30deg",
+                        "rotation_axis":"Y"
+                        },
+                    "leg_left": {
+                        "comp_name": "leg_left.a3dcomp",
+                        "rotation_cs":["0","0",".9"],
+                        "rotation":"20deg",
+                        "compensation_angle":"22.5deg",
+                        "rotation_axis":"Y"
+                        },
+                    "leg_right": {
+                        "comp_name": "leg_right.a3dcomp",
+                        "rotation_cs":["-.04","0",".9375"],
+                        "rotation":"-20deg",
+                        "compensation_angle":"-22.5deg",
+                        "rotation_axis":"Y"
+                        },
+                    "torso": {
+                        "comp_name": "torso.a3dcomp",
+                        "rotation_cs":null,
+                        "rotation":null,
+                        "compensation_angle":null,
+                        "rotation_axis":null
+                        }
+                }
+            }
+
+        Parameters
+        ----------
+        actor_folder : str
+            Path to the actor folder. It must contain a json settings
+            file and a 3dcomponent (.a3dcomp).
+        speed :  float, optional
+            Object movement speed with time (m_per_sec).
+        global_offset : list, optional
+            Offset from Global Coordinate System [x,y,z] in meters.
+        yaw : float, optional
+            Yaw Rotation from Global Coordinate System in deg.
+        pitch : float, optional
+            Pitch Rotation from Global Coordinate System in deg.
+        roll : float, optional
+            Roll Rotation from Global Coordinate System in deg.
+        relative_cs_name : str
+            Relative CS Name of the actor. ``None`` for Global CS.
+        actor_name : str
+            If provided, it overrides the actor name in the JSON.
+
+        Returns
+        -------
+        :class:`pyaedt.modeler.actors.Person`
+
+        References
+        ----------
+
+        >>> oEditor.Insert3DComponent
+        """
+        self._initialize_multipart()
+        if not self._check_actor_folder(actor_folder):
+            return False
+        person1 = Person(actor_folder, speed=speed, relative_cs_name=relative_cs_name)
+        if actor_name:
+            person1._name = actor_name
+        person1.offset = global_offset
+        person1.yaw = self._arg_with_dim(yaw, "deg")
+        person1.pitch = self._arg_with_dim(pitch, "deg")
+        person1.roll = self._arg_with_dim(roll, "deg")
+        person1.insert(self._app)
+        self.multiparts.append(person1)
+        return person1
+
+    @aedt_exception_handler
+    def add_vehicle(self, actor_folder, speed=0, global_offset=[0, 0, 0], yaw=0, pitch=0, roll=0, relative_cs_name=None,
+                    actor_name=None):
+        """Add a Moving Vehicle Multipart from 3D Components.
+
+        It requires a json file in the folder containing vehicle
+        infos. An example json file follows:
+
+         .. code-block:: json
+
+            {
+                "name": "vehicle3",
+                "version": 1,
+                "type":"mustang",
+                "class":"vehicle",
+                "xlim":["-1.94","2.8"],
+                "ylim":["-.91",".91"],
+                "parts": {
+                    "wheels_front": {
+                        "comp_name": "wheels_front.a3dcomp",
+                        "rotation_cs":["1.8970271810532" ,"0" ,"0.34809664860487"],
+                        "tire_radius":"0.349",
+                        "rotation_axis":"Y"
+                        },
+                    "wheels_rear": {
+                        "comp_name": "wheels_rear.a3dcomp",
+                        "rotation_cs":["-0.82228746728897" ,"0","0.34809664860487"],
+                        "tire_radius":"0.349",
+                        "rotation_axis":"Y"
+                        },
+                    "body": {
+                        "comp_name": "body.a3dcomp",
+                        "rotation_cs":null,
+                        "tire_radius":null,
+                        "rotation_axis":null
+                        }
+                }
+            }
+
+        Parameters
+        ----------
+        actor_folder : str
+            Path to the actor directory. It must contain a json settings file
+            and a 3dcomponent (``.a3dcomp`` file).
+        speed :  float, optional
+            Object movement speed with time (m_per_sec).
+        global_offset : list, optional
+            Offset from Global Coordinate System [x,y,z] in meters.
+        yaw : float, optional
+            Yaw Rotation from Global Coordinate System in deg.
+        pitch : float, optional
+            Pitch Rotation from Global Coordinate System in deg.
+        roll : float, optional
+            Roll Rotation from Global Coordinate System in deg.
+        relative_cs_name : str
+            Relative CS Name of the actor. ``None`` for Global CS.
+
+        Returns
+        -------
+        :class:`pyaedt.modeler.actors.Vehicle`
+
+        References
+        ----------
+
+        >>> oEditor.Insert3DComponent
+        """
+        self._initialize_multipart()
+
+        if not self._check_actor_folder(actor_folder):
+            return False
+        vehicle = Vehicle(actor_folder, speed=speed, relative_cs_name=relative_cs_name)
+        if actor_name:
+            vehicle._name = actor_name
+        vehicle.offset = global_offset
+        vehicle.yaw = self._arg_with_dim(yaw, "deg")
+        vehicle.pitch = self._arg_with_dim(pitch, "deg")
+        vehicle.roll = self._arg_with_dim(roll, "deg")
+        vehicle.insert(self._app)
+        self.multiparts.append(vehicle)
+        return vehicle
+
+    @aedt_exception_handler
+    def add_bird(self, actor_folder, speed=0, global_offset=[0, 0, 0], yaw=0, pitch=0,
+                 roll=0, flapping_rate=50, relative_cs_name=None, actor_name=None):
+        """Add a Bird Multipart from 3D Components.
+
+        It requires a json file in the folder containing bird infos. An example json file is showed here.
+
+         .. code-block:: json
+
+            {
+                "name": "bird1",
+                "version": 1,
+                "class":"bird",
+                "xlim":["-.7","2.75"],
+                "ylim":["-1.2","1.2"],
+                "parts": {
+                    "body": {
+                        "comp_name": "body.a3dcomp",
+                        "rotation_cs":null,
+                        "rotation":null,
+                        "rotation_axis":null
+                    },
+                        "wing_right": {
+                        "comp_name": "wing_left.a3dcomp",
+                        "rotation_cs":[".001778" ,".00508" ,".00762"],
+                        "rotation":"-45deg",
+                        "rotation_axis":"X"
+                    },
+                        "wing_left": {
+                        "comp_name": "wing_right.a3dcomp",
+                        "rotation_cs":[".001778" ,"-.00508" ,".00762"],
+                        "rotation":"45deg",
+                        "rotation_axis":"X"
+                    },
+                        "tail": {
+                        "comp_name": "tail.a3dcomp",
+                        "rotation_cs":null,
+                        "rotation":null,
+                        "rotation_axis":null
+                    },
+                        "beak": {
+                        "comp_name": "beak.a3dcomp",
+                        "rotation_cs":null,
+                        "rotation":null,
+                        "rotation_axis":null
+                    }
+                }
+            }
+
+        Parameters
+        ----------
+        actor_folder : str
+            Path to the actor directory. It must contain a json settings file and a
+            3dcomponent (``.a3dcomp`` file)
+        speed :  float, optional
+            Object movement speed with time (m_per_sec).
+        global_offset : list, optional
+            Offset from Global Coordinate System [x,y,z] in meters.
+        yaw : float, optional
+            Yaw Rotation from Global Coordinate System in deg.
+        pitch : float, optional
+            Pitch Rotation from Global Coordinate System in deg.
+        roll : float, optional
+            Roll Rotation from Global Coordinate System in deg.
+        flapping_rate : float, optional
+            Motion flapping rate in Hz.
+        relative_cs_name : str
+            Relative CS Name of the actor. ``None`` for Global CS.
+
+        Returns
+        -------
+        :class:`pyaedt.modeler.actors.Bird`
+
+        References
+        ----------
+
+        >>> oEditor.Insert3DComponent
+
+        Examples
+        --------
+        >>> from pyaedt import Hfss
+        >>> app = Hfss()
+        >>> bird_dir = "path/to/bird/directory"
+        >>> bird1 = app.modeler.primitives.add_bird(bird_dir, 1.0, [19, 4, 3], 120, -5, flapping_rate=30)
+
+        """
+        self._initialize_multipart()
+
+        if not self._check_actor_folder(actor_folder):
+            return False
+        bird = Bird(actor_folder, speed=speed, flapping_rate=self._arg_with_dim(flapping_rate, "Hz"),
+                    relative_cs_name=relative_cs_name)
+        if actor_name:
+            bird._name = actor_name
+        bird.offset = global_offset
+        bird.yaw = self._arg_with_dim(yaw, "deg")
+        bird.pitch = self._arg_with_dim(pitch, "deg")
+        bird.roll = self._arg_with_dim(roll, "deg")
+        bird.insert(self._app)
+        self.multiparts.append(bird)
+        return bird
+
+    @aedt_exception_handler
+    def add_environment(self, env_folder, global_offset=[0, 0, 0], yaw=0, pitch=0, roll=0, relative_cs_name=None,
+                        environment_name=None):
+        """Add an Environment Multipart Component from Json file.
+
+         .. code-block:: json
+
+            {
+                "name": "open1",
+                "version": 1,
+                "class":"environment",
+                "xlim":["-5","95"],
+                "ylim":["-60","60"],
+                "parts": {
+                    "open_area": {
+                        "comp_name": "open1.a3dcomp",
+                        "offset":null,
+                        "rotation_cs":null,
+                        "rotation":null,
+                        "rotation_axis":null,
+                        "duplicate_number":null,
+                        "duplicate_vector":null
+                        }
+                }
+            }
+
+        Parameters
+        ----------
+        env_folder : str
+            Path to the actor directory. It must contain a json
+            settings file and a 3dcomponent (``.a3dcomp`` file).
+        global_offset : list, optional
+            Offset from Global Coordinate System [x,y,z] in meters.
+        yaw : float, optional
+            Yaw Rotation from Global Coordinate System in deg.
+        pitch : float, optional
+            Pitch Rotation from Global Coordinate System in deg.
+        roll : float, optional
+            Roll Rotation from Global Coordinate System in deg.
+        relative_cs_name : str
+            Relative CS Name of the actor. ``None`` for Global CS.
+
+        Returns
+        -------
+        :class:`pyaedt.modeler.multiparts.Environment`
+
+        References
+        ----------
+
+        >>> oEditor.Insert3DComponent
+
+        """
+        self._initialize_multipart()
+        if not self._check_actor_folder(env_folder):
+            return False
+        environment = Environment(env_folder, relative_cs_name=relative_cs_name)
+        if environment_name:
+            environment._name = environment_name
+        environment.offset = global_offset
+        environment.yaw = self._arg_with_dim(yaw, "deg")
+        environment.pitch = self._arg_with_dim(pitch, "deg")
+        environment.roll = self._arg_with_dim(roll, "deg")
+        environment.insert(self._app)
+        self.multiparts.append(environment)
+        return environment

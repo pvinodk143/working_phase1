@@ -1176,7 +1176,9 @@ class NexximComponents(CircuitComponents):
         pyaedt_app,
         solution_name=None,
         extrusion_length=10,
-        map_source_variables=True,
+        enable_cable_modeling=True,
+        default_matrix="",
+        tline_port="",
     ):
         """Add a subcircuit 2D Extractor link.
 
@@ -1188,8 +1190,12 @@ class NexximComponents(CircuitComponents):
             Name of the solution and sweep. The default is ``"Setup1 : Sweep"``.
         extrusion_length : float, str, optional
             Extrusion length for 2D Models. Default is 10 (in model units).
-        map_source_variables : bool, optional
-            Either if the dynamic link object has to map or not the source design variables.
+        enable_cable_modeling : bool, optional
+            Either if the Hfss Cable modeling has to be enabled for 2D subcircuits.
+        default_matrix : str, optional
+            Matrix to link to the subcircuit. Default to `"Original"`. It only applies to 2D Extractor and Q3D.
+        tline_port : str, optional
+            Port to be used for tramsission line. Only applies to Hfss.
 
         Returns
         -------
@@ -1236,9 +1242,8 @@ class NexximComponents(CircuitComponents):
             pin_names.append("Output_ref")
             matrix = ["NAME:Reduce Matrix Choices"] + list(pyaedt_app.omatrix.ListReduceMatrixes())
         variables = {}
-        if map_source_variables:
-            for k, v in pyaedt_app.variable_manager.variables.items():
-                variables[k] = v.string_value
+        for k, v in pyaedt_app.variable_manager.variables.items():
+            variables[k] = v.string_value
         if not solution_name:
             solution_name = pyaedt_app.nominal_sweep
         return self._add_subcircuit_link(
@@ -1252,6 +1257,9 @@ class NexximComponents(CircuitComponents):
             variables=variables,
             extrusion_length_q2d=extrusion_length,
             matrix=matrix,
+            enable_cable_modeling=True,
+            default_matrix="",
+            tline_port="",
         )
 
     @aedt_exception_handler
@@ -1267,6 +1275,9 @@ class NexximComponents(CircuitComponents):
         variables=None,
         extrusion_length_q2d=10,
         matrix=None,
+        enable_cable_modeling=True,
+        default_matrix="",
+        tline_port="",
     ):
         """Add a subcircuit HFSS link.
 
@@ -1293,6 +1304,12 @@ class NexximComponents(CircuitComponents):
         extrusion_length_q2d : str, float optional
             Extrusion length for 2D Models. Default is 10 (in model units).
         matrix : list, optional
+        enable_cable_modeling : bool, optional
+            Either if the Hfss Cable modeling has to be enabled for 2D subcircuits.
+        default_matrix : str, optional
+            Matrix to link to the subcircuit. Default to `"Original"`. It only applies to 2D Extractor and Q3D.
+        tline_port : str, optional
+            Port to be used for tramsission line. Only applies to Hfss.
 
         Returns
         -------
@@ -1395,6 +1412,8 @@ class NexximComponents(CircuitComponents):
             "IgnoreDepVars:=",
             False,
         ]
+        if not default_matrix:
+            default_matrix = "Original"
         if owner == "HFSS":
             compInfo.extend(
                 [
@@ -1415,11 +1434,11 @@ class NexximComponents(CircuitComponents):
             )
             if not matrix:
                 matrix = ["NAME:Reduce Matrix Choices", "Original"]
-            compInfo.extend(["Reduce Matrix:=", "Original", matrix])
+            compInfo.extend(["Reduce Matrix:=", default_matrix, matrix])
         else:
             if not matrix:
                 matrix = ["NAME:Reduce Matrix Choices", "Original"]
-            compInfo.extend(["Reduce Matrix:=", "Original", matrix, "EnableCableModeling:=", False])
+            compInfo.extend(["Reduce Matrix:=", default_matrix, matrix, "EnableCableModeling:=", enable_cable_modeling])
 
         self.o_model_manager.Add(compInfo)
 
@@ -1489,7 +1508,6 @@ class NexximComponents(CircuitComponents):
             compInfo2.append("Terminal:=")
             compInfo2.append([pin, pin, "A", False, id, 1, "", "Electrical", "0"])
             id += 1
-
         compInfo2.append(["NAME:Properties", "TextProp:=", ["Owner", "RD", "", owner]])
         compInfo2.append("CompExtID:=")
         compInfo2.append(5)
@@ -1540,9 +1558,11 @@ class NexximComponents(CircuitComponents):
         self._app._odesign.AddCompInstance(comp_name)
         self.refresh_all_ids()
         for el in self.components:
-            item = comp_name
-            item2 = self.components[el].composed_name
             if comp_name in self.components[el].composed_name:
+                if model_type == "2D Extractor":
+                    self.components[el].set_property("Length", extrusion_length_q2d)
+                elif model_type == "HFSS" and tline_port:
+                    self.components[el].set_property("TLineLength", extrusion_length_q2d)
                 return self.components[el]
         return False
 

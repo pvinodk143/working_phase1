@@ -1321,12 +1321,19 @@ class Object3d(object):
             Type of the object.
 
         """
-        if self._m_name in self._primitives.solid_names:
+        if self._m_name in self._primitives._solids:
             self._object_type = "Solid"
+        elif self._m_name in self._primitives._sheets:
+            self._object_type = "Sheet"
+        elif self._m_name in self._primitives._lines:
+            self._object_type = "Line"
         else:
-            if self._m_name in self._primitives.sheet_names:
+            self._primitives._refresh_solids()
+            if self._m_name in self._primitives._solids:
+                self._object_type = "Solid"
+            elif self._m_name in self._primitives._sheets:
                 self._object_type = "Sheet"
-            elif self._m_name in self._primitives.line_names:
+            elif self._m_name in self._primitives._lines:
                 self._object_type = "Line"
         return self._object_type
 

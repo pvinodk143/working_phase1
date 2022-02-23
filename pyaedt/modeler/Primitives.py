@@ -2266,6 +2266,8 @@ class Primitives(object):
             o = self.objects[partId]
             oEdgeIDs = self._oeditor.GetEdgeIDsFromObject(o.name)
             oEdgeIDs = [int(i) for i in oEdgeIDs]
+        elif isinstance(partId, FacePrimitive):
+            oEdgeIDs = [int(i.id) for i in partId.edges]
         return oEdgeIDs
 
     @aedt_exception_handler

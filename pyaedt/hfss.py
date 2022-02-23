@@ -1963,8 +1963,15 @@ class Hfss(FieldAnalysis3D, object):
         >>> oModule.AssignVoltage
         >>> oModule.AssignCurrent
         """
-
-        props = OrderedDict({"Objects": [sheet_name], "Direction": OrderedDict({"Start": point1, "End": point2})})
+        sheet_name = self.modeler.convert_to_selections(sheet_name, True)
+        if isinstance(sheet_name[0], int):
+            props = OrderedDict({"Faces": sheet_name,
+                                 "Direction": OrderedDict(
+                                     {"Coordinate System": "Global", "Start": point1, "End": point2})})
+        else:
+            props = OrderedDict({"Objects": sheet_name,
+                                 "Direction": OrderedDict(
+                                     {"Coordinate System": "Global", "Start": point1, "End": point2})})
         return self._create_boundary(sourcename, props, sourcetype)
 
     @aedt_exception_handler
@@ -3238,10 +3245,11 @@ class Hfss(FieldAnalysis3D, object):
         >>> v1 = hfss.assign_voltage_source_to_sheet(sheet.name, hfss.AxisDir.XNeg, "VoltageSheetExample")
 
         """
-
         if self.solution_type in ["Modal", "Terminal", "Transient Network"]:
             point0, point1 = self.modeler.get_mid_points_on_dir(sheet_name, axisdir)
             sourcename = self._get_unique_source_name(sourcename, "Voltage")
+            point0 = [self._arg_with_units(i) for i in point0]
+            point1 = [self._arg_with_units(i) for i in point1]
             return self.create_source_excitation(sheet_name, point0, point1, sourcename, sourcetype="Voltage")
         return False
 
